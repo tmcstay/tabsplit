@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\supabase\\\\migrations\")",
+      "Bash(node -e \"const p = require\\('./node_modules/next/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/@supabase/ssr/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/@supabase/supabase-js/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const m = require\\('./node_modules/@supabase/ssr/dist/index.js'\\); console.log\\(Object.keys\\(m\\)\\)\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\lib\\\\supabase\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\types\")",
+      "PowerShell(node -e \"console.log\\(require\\('./node_modules/tailwindcss/package.json'\\).version\\)\" 2>&1)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\\\(auth\\)\\\\login\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\\\(auth\\)\\\\verify\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\\\(auth\\)\\\\callback\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\profile\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\_components\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const deps={...p.dependencies,...p.devDependencies}; Object.keys\\(deps\\).filter\\(k=>k.includes\\('capacitor'\\)\\).forEach\\(k=>console.log\\(k,deps[k]\\)\\)\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\Tony\\\\Documents\\\\tabsplit\\\\src\\\\app\\\\\\(auth\\)\\\\forgot-password\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Tony\\Documents\\tabsplit\\supabase\\migrations",
+      "c:\\Users\\Tony\\Documents\\tabsplit\\src\\app\\groups"
+    ]
+  }
+}
