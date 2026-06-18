@@ -1,18 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Tables, SplitStatus } from '@/types/database'
 import { deleteSplit } from './splits/actions'
 
 type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
 
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat('en-AU', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(iso))
+function ClientDate({ iso }: { iso: string }) {
+  const [label, setLabel] = useState<string | null>(null)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLabel(new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso)))
+  }, [iso])
+  return <>{label}</>
 }
 
 const STATUS_STYLES: Record<SplitStatus, { label: string; cls: string }> = {
@@ -77,7 +78,7 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
           <div className="min-w-0 flex-1 pr-8">
             <p className="truncate text-base font-semibold text-zinc-900">{split.title}</p>
             <p className="mt-0.5 text-xs text-zinc-400">
-              {formatDate(split.created_at)}
+              <ClientDate iso={split.created_at} />
               {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
             </p>
           </div>
