@@ -37,16 +37,14 @@ export default function RootLayout({
       <body className="min-h-full bg-zinc-50 font-sans text-zinc-900">
         {children}
         <BottomNav />
-        {process.env.NODE_ENV === 'development' && (
-          <Script id="eruda" strategy="afterInteractive">{`
-            if (window.location.hostname !== 'localhost') {
-              var s = document.createElement('script');
-              s.src = 'https://cdn.jsdelivr.net/npm/eruda';
-              s.onload = function() { eruda.init(); };
-              document.head.appendChild(s);
-            }
-          `}</Script>
-        )}
+        <Script id="eruda" strategy="afterInteractive">{`
+          if (window.location.hostname !== 'localhost' || window.location.hostname.includes('vercel.app')) {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+            s.onload = function() { eruda.init(); };
+            document.head.appendChild(s);
+          }
+        `}</Script>
       </body>
     </html>
   )
