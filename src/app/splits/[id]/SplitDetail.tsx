@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
-import { saveItems, assignItem, mergeAttendees, finaliseSplit, equalSplit } from './actions'
+import { saveItems, assignItem, mergeAttendees, finaliseSplit, equalSplit, addLineItem } from './actions'
 
 interface Props {
   split: Tables<'splits'>
@@ -106,6 +106,13 @@ export function SplitDetail({
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAddCharge, setShowAddCharge] = useState(false)
+  const [chargeType, setChargeType] = useState<'tip' | 'app' | 'service' | 'custom'>('tip')
+  const [chargeDesc, setChargeDesc] = useState('')
+  const [chargeAmount, setChargeAmount] = useState('')
+  const [chargeAssignAll, setChargeAssignAll] = useState(true)
+  const [appFeeMode, setAppFeeMode] = useState<'host' | 'individual'>('host')
+  const [appFeeHostId, setAppFeeHostId] = useState<string>('')
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -114,6 +121,7 @@ export function SplitDetail({
     )
   }, [items, initialAssignments])
 
+  const subtotal = items.reduce((sum, item) => sum + item.price, 0)
   const allAssigned = items.length > 0 && items.every(i => (assignments[i.id] ?? []).length > 0)
   const totalAssigned = items.reduce(
     (sum, item) => ((assignments[item.id] ?? []).length > 0 ? sum + item.price : sum),
@@ -355,6 +363,46 @@ export function SplitDetail({
     }
   }
 
+  // ── Add charge ───────────────────────────────────────────────────────────────
+
+  async function handleAddCharge() {
+    const desc =
+      chargeType === 'tip' ? 'Tip' :
+      chargeType === 'app' ? 'App fee' :
+      chargeType === 'service' ? 'Service charge' :
+      chargeDesc.trim()
+    const totalEntered = Math.round(parseFloat(chargeAmount) * 100) / 100
+    if (!desc || isNaN(totalEntered) || totalEntered <= 0) return
+
+    // For app fee individual mode: price = per-person × non-host count, assign only to non-hosts
+    let finalPrice = totalEntered
+    let attendeeIds: string[] | null = chargeAssignAll ? null : []
+    if (chargeType === 'app' && appFeeMode === 'individual') {
+      const perPerson = totalEntered / attendees.length
+      const nonHosts = attendees.filter(a => a.id !== appFeeHostId)
+      finalPrice = Math.round(perPerson * nonHosts.length * 100) / 100
+      attendeeIds = nonHosts.map(a => a.id)
+    }
+
+    setBusy(true)
+    setError(null)
+    try {
+      await addLineItem(split.id, desc, finalPrice, attendeeIds, items.length + 1)
+      setShowAddCharge(false)
+      setChargeType('tip')
+      setChargeDesc('')
+      setChargeAmount('')
+      setChargeAssignAll(true)
+      setAppFeeMode('host')
+      setAppFeeHostId('')
+      router.refresh()
+    } catch {
+      setError('Failed to add charge.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ── Finalise ─────────────────────────────────────────────────────────────────
 
   async function handleFinalise() {
@@ -506,18 +554,32 @@ export function SplitDetail({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => { setShowMerge(true); setMergeSelected([]); setMergeLabel('') }}
-            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="9" cy="8" r="3" />
-              <circle cx="15" cy="8" r="3" />
-              <path d="M3 20c0-3 2.7-5 6-5h6c3.3 0 6 2 6 5" />
-            </svg>
-            Merge attendees
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => { setShowMerge(true); setMergeSelected([]); setMergeLabel('') }}
+              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="9" cy="8" r="3" />
+                <circle cx="15" cy="8" r="3" />
+                <path d="M3 20c0-3 2.7-5 6-5h6c3.3 0 6 2 6 5" />
+              </svg>
+              Merge attendees
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddCharge(true)}
+              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="16" />
+                <line x1="8" y1="12" x2="16" y2="12" />
+              </svg>
+              Add charge
+            </button>
+          </div>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
@@ -836,6 +898,181 @@ export function SplitDetail({
                 className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 Merge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Add charge bottom sheet ──────────────────────────────────────────── */}
+      {showAddCharge && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowAddCharge(false)} />
+          <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
+            <div className="border-b border-zinc-100 px-4 py-4">
+              <p className="text-sm font-semibold text-zinc-900">Add charge</p>
+              <p className="mt-0.5 text-xs text-zinc-400">Add a tip, fee, or other charge to the bill.</p>
+            </div>
+
+            <div className="space-y-4 px-4 py-4">
+              {/* Type chips */}
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { value: 'tip',     label: 'Tip' },
+                  { value: 'app',     label: 'App fee' },
+                  { value: 'service', label: 'Service' },
+                  { value: 'custom',  label: 'Custom' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => { setChargeType(opt.value); setChargeAmount(''); setAppFeeMode('host'); setAppFeeHostId('') }}
+                    className={`rounded-lg py-2 text-xs font-medium transition-colors ${
+                      chargeType === opt.value
+                        ? 'bg-zinc-900 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom description */}
+              {chargeType === 'custom' && (
+                <input
+                  type="text"
+                  placeholder="Description"
+                  value={chargeDesc}
+                  onChange={e => setChargeDesc(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                />
+              )}
+
+              {/* Tip percentage shortcuts */}
+              {chargeType === 'tip' && subtotal > 0 && (
+                <div>
+                  <p className="mb-2 text-xs text-zinc-400">Bill subtotal: {fmt(subtotal)}</p>
+                  <div className="flex gap-2">
+                    {[10, 15, 18, 20].map(pct => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setChargeAmount((Math.round(subtotal * pct) / 100).toFixed(2))}
+                        className="flex-1 rounded-lg bg-zinc-100 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-200"
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* App fee payment mode */}
+              {chargeType === 'app' && (
+                <div className="space-y-3 rounded-xl bg-zinc-50 p-3">
+                  <p className="text-xs font-medium text-zinc-600">How was the fee charged?</p>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'host',       label: 'Host paid total' },
+                      { value: 'individual', label: 'Per person' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setAppFeeMode(opt.value); setAppFeeHostId('') }}
+                        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                          appFeeMode === opt.value
+                            ? 'bg-zinc-900 text-white'
+                            : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {appFeeMode === 'host' && (
+                    <p className="text-xs text-zinc-400">
+                      Full fee split equally — each person reimburses the host their share.
+                    </p>
+                  )}
+
+                  {appFeeMode === 'individual' && (
+                    <>
+                      <p className="text-xs text-zinc-400">
+                        Each person is billed their own share. Select the host to exclude them — they&apos;ll pay the app separately.
+                      </p>
+                      <select
+                        value={appFeeHostId}
+                        onChange={e => setAppFeeHostId(e.target.value)}
+                        className="w-full rounded-lg px-3 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                      >
+                        <option value="">Host not listed as attendee</option>
+                        {attendees.map(a => (
+                          <option key={a.id} value={a.id}>{a.display_name}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+
+                  {/* Breakdown preview */}
+                  {chargeAmount && !isNaN(parseFloat(chargeAmount)) && parseFloat(chargeAmount) > 0 && (() => {
+                    const total = parseFloat(chargeAmount)
+                    const perPerson = total / attendees.length
+                    if (appFeeMode === 'host') {
+                      return (
+                        <p className="text-xs text-zinc-500">
+                          {fmt(total)} ÷ {attendees.length} people = <span className="font-medium text-zinc-700">{fmt(perPerson)} each</span>
+                        </p>
+                      )
+                    }
+                    const nonHostCount = attendees.length - (appFeeHostId ? 1 : 0)
+                    const hostName = appFeeHostId ? attendees.find(a => a.id === appFeeHostId)?.display_name : null
+                    return (
+                      <div className="space-y-0.5 text-xs text-zinc-500">
+                        <p>{attendees.length} people × {fmt(perPerson)} = {fmt(total)} total</p>
+                        <p className="font-medium text-zinc-700">{nonHostCount} attendees charged {fmt(perPerson)} each in split</p>
+                        {hostName && <p className="text-zinc-400">{hostName} pays {fmt(perPerson)} directly to app provider</p>}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {/* Amount */}
+              <div className="flex items-center gap-2 rounded-lg px-3 shadow-sm ring-1 ring-zinc-300 focus-within:ring-2 focus-within:ring-zinc-900">
+                <span className="text-sm font-medium text-zinc-400">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={chargeAmount}
+                  onChange={e => setChargeAmount(e.target.value)}
+                  className="flex-1 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none"
+                />
+              </div>
+
+              {/* Split equally toggle — hidden for app fee (handled by mode above) */}
+              {chargeType !== 'app' && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">Split equally</p>
+                    <p className="text-xs text-zinc-400">Assign to all attendees automatically</p>
+                  </div>
+                  <Toggle checked={chargeAssignAll} onChange={() => setChargeAssignAll(v => !v)} />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAddCharge}
+                disabled={
+                  !chargeAmount || parseFloat(chargeAmount) <= 0 ||
+                  (chargeType === 'custom' && !chargeDesc.trim()) || busy
+                }
+                className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {busy ? 'Adding…' : 'Add to bill'}
               </button>
             </div>
           </div>

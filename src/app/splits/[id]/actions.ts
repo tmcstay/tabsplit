@@ -96,6 +96,39 @@ export async function finaliseSplit(splitId: string): Promise<void> {
   if (statusErr || linkErr) throw new Error('Failed to finalise split.')
 }
 
+export async function addLineItem(
+  splitId: string,
+  description: string,
+  price: number,
+  // null = assign to all attendees, [] = leave unassigned, [...ids] = assign to specific attendees
+  attendeeIds: string[] | null,
+  sortOrder: number,
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: item, error } = await supabase
+    .from('items')
+    .insert({ split_id: splitId, description, price, sort_order: sortOrder })
+    .select()
+    .single()
+
+  if (error || !item) throw new Error('Failed to add line item.')
+
+  let ids = attendeeIds
+  if (ids === null) {
+    const { data: atts } = await supabase.from('attendees').select('id').eq('split_id', splitId)
+    ids = atts?.map(a => a.id) ?? []
+  }
+
+  if (ids.length > 0) {
+    await supabase.from('item_assignments').insert(
+      ids.map(aId => ({ item_id: item.id, attendee_id: aId }))
+    )
+  }
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
