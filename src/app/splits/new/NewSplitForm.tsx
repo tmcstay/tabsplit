@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -69,6 +69,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     // Mobile Safari can return a File with size=0 — treat as valid if it has a name
     const validFile = file && (file.size > 0 || file.name.length > 0) ? file : null
     setReceipt(validFile)
+    console.log('setReceipt called with:', validFile?.name, validFile?.size)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(validFile ? URL.createObjectURL(validFile) : null)
   }
@@ -222,6 +223,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   // ── Step 3: Receipt ────────────────────────────────────────────────────────
 
+  console.log('step 3 render — receipt:', receipt?.name ?? null, receipt?.size ?? null)
+
   return (
     <div className="pb-24">
     <div className="space-y-6">
@@ -290,7 +293,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
           disabled={loading}
           className="flex-1 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? 'Creating…' : receipt ? 'Create Split' : 'Skip & Create'}
+          {(() => { console.log('button label eval — loading:', loading, 'receipt:', receipt?.name ?? null); return loading ? 'Creating…' : receipt ? 'Create Split' : 'Skip & Create' })()}
         </button>
       </div>
     </div>
