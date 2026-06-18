@@ -33,6 +33,7 @@ function StepIndicator({ step }: { step: Step }) {
 }
 
 export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees }: Props) {
+  console.log('NewSplitForm render — initialAttendees:', initialAttendees.length, 'groupId:', groupId)
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -69,6 +70,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   }
 
   async function handleSubmit() {
+    console.log('handleSubmit fired')
     setError(null)
     setLoading(true)
     try {
@@ -82,7 +84,9 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
       const splitId = await createSplit(fd)
       router.push(`/splits/${splitId}`)
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('NEXT_REDIRECT')) throw err
+      console.error('createSplit error:', err)
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }
@@ -215,6 +219,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   // ── Step 3: Receipt ────────────────────────────────────────────────────────
 
   return (
+    <div className="pb-24">
     <div className="space-y-6">
       <StepIndicator step={3} />
       <div>
@@ -267,7 +272,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
       )}
 
-      <div className="flex gap-3">
+      <div className="relative z-50 flex gap-3">
         <button
           type="button"
           onClick={() => setStep(2)}
@@ -277,13 +282,14 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         </button>
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => { console.log('button clicked'); handleSubmit() }}
           disabled={loading}
           className="flex-1 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Creating…' : receipt ? 'Create Split' : 'Skip & Create'}
         </button>
       </div>
+    </div>
     </div>
   )
 }

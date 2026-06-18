@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { BottomNav } from './_components/BottomNav'
@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'TabSplit',
   description: 'Split the bill, keep the peace.',
+  manifest: '/manifest.json',
+}
+
+export const viewport: Viewport = {
+  themeColor: '#18181b',
 }
 
 export default function RootLayout({

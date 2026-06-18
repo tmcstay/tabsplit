@@ -14,6 +14,13 @@ interface Props {
   signedReceiptUrl: string | null
 }
 
+interface LineGroup {
+  expanded: boolean
+  combineUnits: boolean
+  sharedAttendees: string[]
+  unitAssignments: Record<string, string> // itemId → single attendeeId
+}
+
 function fmt(price: number) {
   return `$${price.toFixed(2)}`
 }
@@ -35,6 +42,18 @@ function CheckIcon() {
   )
 }
 
+function ChevronDown({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
 function Checkbox({ checked }: { checked: boolean }) {
   return (
     <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
@@ -42,6 +61,24 @@ function Checkbox({ checked }: { checked: boolean }) {
     }`}>
       {checked && <CheckIcon />}
     </span>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+        checked ? 'bg-zinc-900' : 'bg-zinc-300'
+      }`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+        checked ? 'translate-x-6' : 'translate-x-1'
+      }`} />
+    </button>
   )
 }
 
@@ -64,11 +101,14 @@ export function SplitDetail({
   const [mergeSelected, setMergeSelected] = useState<string[]>([])
   const [mergeLabel, setMergeLabel] = useState('')
   const [showReceiptFull, setShowReceiptFull] = useState(false)
+  const [showAssignByLine, setShowAssignByLine] = useState(false)
+  const [lineGroups, setLineGroups] = useState<Record<string, LineGroup>>({})
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [rawText, setRawText] = useState<string | null>(null)
+  const [showRawText, setShowRawText] = useState(false)
 
-  // Sync state when props change after router.refresh()
   useEffect(() => {
     setAssignments(
       Object.fromEntries(items.map(item => [item.id, initialAssignments[item.id] ?? []]))
@@ -81,6 +121,14 @@ export function SplitDetail({
     0
   )
   const unassignedCount = items.filter(i => !(assignments[i.id] ?? []).length).length
+
+  const itemsByDescription = items.reduce((map, item) => {
+    if (!map[item.description]) map[item.description] = []
+    map[item.description].push(item)
+    return map
+  }, {} as Record<string, Tables<'items'>[]>)
+
+  // ── Scan receipt ─────────────────────────────────────────────────────────────
 
   async function handleScanReceipt() {
     if (!signedReceiptUrl) return
@@ -101,7 +149,8 @@ export function SplitDetail({
         body: JSON.stringify({ image: base64 }),
       })
       if (!ocrRes.ok) throw new Error()
-      const { items: ocrItems, total } = await ocrRes.json()
+      const { items: ocrItems, total, rawText: raw } = await ocrRes.json()
+      setRawText(raw ?? null)
       if (!ocrItems?.length) {
         setError('No items detected in the receipt. Try again or contact support.')
         return
@@ -115,6 +164,8 @@ export function SplitDetail({
     }
   }
 
+  // ── Single-item assign modal ─────────────────────────────────────────────────
+
   function openAssignModal(itemId: string) {
     setAssignModalItemId(itemId)
     setAssignSelected(assignments[itemId] ?? [])
@@ -126,6 +177,13 @@ export function SplitDetail({
     )
   }
 
+  function toggleAssignAll() {
+    const allIds = attendees.map(a => a.id)
+    setAssignSelected(prev =>
+      allIds.every(id => prev.includes(id)) ? [] : allIds
+    )
+  }
+
   async function handleConfirmAssign() {
     if (!assignModalItemId) return
     const itemId = assignModalItemId
@@ -134,6 +192,8 @@ export function SplitDetail({
     setAssignModalItemId(null)
     await assignItem(itemId, ids)
   }
+
+  // ── Equal split ──────────────────────────────────────────────────────────────
 
   async function handleEqualSplit() {
     setBusy(true)
@@ -147,6 +207,132 @@ export function SplitDetail({
       setBusy(false)
     }
   }
+
+  // ── Assign by line ───────────────────────────────────────────────────────────
+
+  function openAssignByLine() {
+    const initial: Record<string, LineGroup> = {}
+    for (const [desc, group] of Object.entries(itemsByDescription)) {
+      const firstAssigned = assignments[group[0].id] ?? []
+      const allSame = group.every(i => (assignments[i.id] ?? []).join() === firstAssigned.join())
+      if (allSame && firstAssigned.length > 0) {
+        // All units already assigned the same way — pre-populate combined
+        initial[desc] = { expanded: false, combineUnits: true, sharedAttendees: firstAssigned, unitAssignments: {} }
+      } else if (!allSame) {
+        // Mixed assignments — default to per-unit
+        const unitAssignments: Record<string, string> = {}
+        group.forEach(item => {
+          const a = assignments[item.id] ?? []
+          if (a.length === 1) unitAssignments[item.id] = a[0]
+        })
+        initial[desc] = { expanded: false, combineUnits: false, sharedAttendees: [], unitAssignments }
+      } else {
+        initial[desc] = { expanded: false, combineUnits: true, sharedAttendees: [], unitAssignments: {} }
+      }
+    }
+    setLineGroups(initial)
+    setShowAssignByLine(true)
+  }
+
+  function toggleGroupExpanded(desc: string) {
+    setLineGroups(prev => ({
+      ...prev,
+      [desc]: { ...prev[desc], expanded: !prev[desc].expanded },
+    }))
+  }
+
+  function toggleCombineUnits(desc: string) {
+    setLineGroups(prev => {
+      const g = prev[desc]
+      return {
+        ...prev,
+        [desc]: {
+          ...g,
+          combineUnits: !g.combineUnits,
+          // clear incompatible selections when switching modes
+          sharedAttendees: !g.combineUnits ? [] : g.sharedAttendees,
+          unitAssignments: g.combineUnits ? {} : g.unitAssignments,
+        },
+      }
+    })
+  }
+
+  function toggleSharedAttendee(desc: string, attendeeId: string) {
+    setLineGroups(prev => {
+      const g = prev[desc]
+      const current = g.sharedAttendees
+      return {
+        ...prev,
+        [desc]: {
+          ...g,
+          sharedAttendees: current.includes(attendeeId)
+            ? current.filter(id => id !== attendeeId)
+            : [...current, attendeeId],
+        },
+      }
+    })
+  }
+
+  function toggleSharedAll(desc: string) {
+    const allIds = attendees.map(a => a.id)
+    setLineGroups(prev => {
+      const g = prev[desc]
+      const allSelected = allIds.every(id => g.sharedAttendees.includes(id))
+      return { ...prev, [desc]: { ...g, sharedAttendees: allSelected ? [] : allIds } }
+    })
+  }
+
+  function setUnitAttendee(desc: string, itemId: string, attendeeId: string) {
+    setLineGroups(prev => {
+      const g = prev[desc]
+      return {
+        ...prev,
+        [desc]: { ...g, unitAssignments: { ...g.unitAssignments, [itemId]: attendeeId } },
+      }
+    })
+  }
+
+  const lineGroupsHaveSelection = Object.values(lineGroups).some(g => {
+    if (g.combineUnits) return g.sharedAttendees.length > 0
+    return Object.values(g.unitAssignments).some(id => id)
+  })
+
+  async function handleConfirmAssignByLine() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updates: Array<{ itemId: string; attendeeIds: string[] }> = []
+      for (const [desc, g] of Object.entries(lineGroups)) {
+        const group = itemsByDescription[desc] ?? []
+        if (g.combineUnits) {
+          if (g.sharedAttendees.length > 0) {
+            group.forEach(item => updates.push({ itemId: item.id, attendeeIds: g.sharedAttendees }))
+          }
+        } else {
+          group.forEach(item => {
+            const id = g.unitAssignments[item.id]
+            if (id) updates.push({ itemId: item.id, attendeeIds: [id] })
+          })
+        }
+      }
+      for (const u of updates) {
+        await assignItem(u.itemId, u.attendeeIds)
+      }
+      setAssignments(prev => {
+        const next = { ...prev }
+        updates.forEach(u => { next[u.itemId] = u.attendeeIds })
+        return next
+      })
+      setShowAssignByLine(false)
+      setLineGroups({})
+    } catch {
+      setError('Failed to assign items.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── Merge attendees ──────────────────────────────────────────────────────────
 
   function toggleMergeSelect(id: string) {
     setMergeSelected(prev =>
@@ -171,6 +357,8 @@ export function SplitDetail({
     }
   }
 
+  // ── Finalise ─────────────────────────────────────────────────────────────────
+
   async function handleFinalise() {
     if (!allAssigned) return
     setBusy(true)
@@ -186,7 +374,7 @@ export function SplitDetail({
 
   const assignModalItem = assignModalItemId ? items.find(i => i.id === assignModalItemId) : null
 
-  // ── No items yet ────────────────────────────────────────────────────────────
+  // ── No items yet ─────────────────────────────────────────────────────────────
 
   if (items.length === 0) {
     return (
@@ -245,12 +433,29 @@ export function SplitDetail({
               )}
             </button>
           )}
+          {rawText && (
+            <div className="mt-6 w-full max-w-xs rounded-xl bg-zinc-50 ring-1 ring-zinc-200">
+              <button
+                type="button"
+                onClick={() => setShowRawText(v => !v)}
+                className="flex w-full items-center justify-between px-4 py-3 text-xs font-medium text-zinc-500"
+              >
+                Raw OCR output
+                <span aria-hidden="true">{showRawText ? '▲' : '▼'}</span>
+              </button>
+              {showRawText && (
+                <pre className="max-h-64 overflow-y-auto border-t border-zinc-200 p-4 text-xs text-zinc-600 font-mono whitespace-pre-wrap break-words">
+                  {rawText}
+                </pre>
+              )}
+            </div>
+          )}
         </main>
       </>
     )
   }
 
-  // ── Item assignment UI ───────────────────────────────────────────────────────
+  // ── Item assignment UI ────────────────────────────────────────────────────────
 
   return (
     <>
@@ -264,6 +469,14 @@ export function SplitDetail({
             <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900">{split.title}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={openAssignByLine}
+              disabled={busy}
+              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50"
+            >
+              Assign by line
+            </button>
             <button
               type="button"
               onClick={handleEqualSplit}
@@ -284,84 +497,105 @@ export function SplitDetail({
         </div>
       </header>
 
-      <main className="flex-1 space-y-4 px-4 py-4 pb-28">
-        {/* Receipt thumbnail */}
-        {signedReceiptUrl && (
+      <main className="flex flex-1 gap-3 px-4 py-4 pb-28">
+        {/* Raw OCR panel */}
+        {rawText && (
+          <div className="w-2/5 shrink-0">
+            <div className="sticky top-20 overflow-hidden rounded-xl bg-zinc-50 ring-1 ring-zinc-200">
+              <button
+                type="button"
+                onClick={() => setShowRawText(v => !v)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-xs font-medium text-zinc-500"
+              >
+                Raw OCR
+                <span aria-hidden="true">{showRawText ? '▲' : '▼'}</span>
+              </button>
+              {showRawText && (
+                <pre className="max-h-[60vh] overflow-y-auto border-t border-zinc-200 p-3 text-xs text-zinc-600 font-mono whitespace-pre-wrap break-words">
+                  {rawText}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Main content */}
+        <div className="min-w-0 flex-1 space-y-4">
+          {signedReceiptUrl && (
+            <button
+              type="button"
+              onClick={() => setShowReceiptFull(true)}
+              className="block w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-zinc-200"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={signedReceiptUrl} alt="Receipt" className="max-h-28 w-full object-cover" />
+              <p className="bg-zinc-50 py-1.5 text-center text-xs text-zinc-400">Tap to view full receipt</p>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => setShowReceiptFull(true)}
-            className="block w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-zinc-200"
+            onClick={() => { setShowMerge(true); setMergeSelected([]); setMergeLabel('') }}
+            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={signedReceiptUrl} alt="Receipt" className="max-h-28 w-full object-cover" />
-            <p className="bg-zinc-50 py-1.5 text-center text-xs text-zinc-400">Tap to view full receipt</p>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="8" r="3" />
+              <circle cx="15" cy="8" r="3" />
+              <path d="M3 20c0-3 2.7-5 6-5h6c3.3 0 6 2 6 5" />
+            </svg>
+            Merge attendees
           </button>
-        )}
 
-        {/* Merge button */}
-        <button
-          type="button"
-          onClick={() => { setShowMerge(true); setMergeSelected([]); setMergeLabel('') }}
-          className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="9" cy="8" r="3" />
-            <circle cx="15" cy="8" r="3" />
-            <path d="M3 20c0-3 2.7-5 6-5h6c3.3 0 6 2 6 5" />
-          </svg>
-          Merge attendees
-        </button>
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          )}
 
-        {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
-        )}
-
-        {/* Items */}
-        <ul className="space-y-2">
-          {items.map(item => {
-            const assigned = assignments[item.id] ?? []
-            const isAssigned = assigned.length > 0
-            const perPerson = isAssigned ? item.price / assigned.length : null
-            return (
-              <li
-                key={item.id}
-                className={`rounded-xl px-4 py-3 shadow-sm ring-1 ${
-                  isAssigned ? 'bg-white ring-zinc-200' : 'bg-amber-50 ring-amber-200'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-900">{item.description}</p>
-                    {isAssigned ? (
-                      <p className="mt-0.5 truncate text-xs text-zinc-400">
-                        {assigned
-                          .map(id => attendees.find(a => a.id === id)?.display_name ?? '?')
-                          .join(', ')}
-                        {assigned.length > 1 && ` · ${fmt(perPerson!)} each`}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-xs text-amber-600">Unassigned</p>
-                    )}
+          <ul className="space-y-2">
+            {items.map(item => {
+              const assigned = assignments[item.id] ?? []
+              const isAssigned = assigned.length > 0
+              const perPerson = isAssigned ? item.price / assigned.length : null
+              return (
+                <li
+                  key={item.id}
+                  className={`rounded-xl px-4 py-3 shadow-sm ring-1 ${
+                    isAssigned ? 'bg-white ring-zinc-200' : 'bg-amber-50 ring-amber-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-zinc-900">{item.description}</p>
+                      {isAssigned ? (
+                        <p className="mt-0.5 truncate text-xs text-zinc-400">
+                          {assigned
+                            .map(id => attendees.find(a => a.id === id)?.display_name ?? '?')
+                            .join(', ')}
+                          {assigned.length > 1 && ` · ${fmt(perPerson!)} each`}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-amber-600">Unassigned</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-900">{fmt(item.price)}</span>
+                      <button
+                        type="button"
+                        onClick={() => openAssignModal(item.id)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                          isAssigned
+                            ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                            : 'bg-amber-500 text-white hover:bg-amber-600'
+                        }`}
+                      >
+                        {isAssigned ? 'Edit' : 'Assign'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm font-semibold text-zinc-900">{fmt(item.price)}</span>
-                    <button
-                      type="button"
-                      onClick={() => openAssignModal(item.id)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                        isAssigned
-                          ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                          : 'bg-amber-500 text-white hover:bg-amber-600'
-                      }`}
-                    >
-                      {isAssigned ? 'Edit' : 'Assign'}
-                    </button>
-                  </div>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       </main>
 
       {/* Summary bar */}
@@ -386,7 +620,7 @@ export function SplitDetail({
       {/* Receipt full-size overlay */}
       {showReceiptFull && signedReceiptUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
           onClick={() => setShowReceiptFull(false)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -394,17 +628,27 @@ export function SplitDetail({
         </div>
       )}
 
-      {/* Assign bottom sheet */}
+      {/* ── Single-item assign bottom sheet ─────────────────────────────────── */}
       {assignModalItemId && assignModalItem && (
-        <div className="fixed inset-0 z-40 flex items-end">
+        <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setAssignModalItemId(null)} />
-          <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
-            <div className="border-b border-zinc-100 px-4 py-4">
+          <div className="relative flex max-h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+            {/* Header */}
+            <div className="shrink-0 border-b border-zinc-100 px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Assign item</p>
               <p className="mt-1 truncate text-sm font-semibold text-zinc-900">{assignModalItem.description}</p>
               <p className="text-sm text-zinc-500">{fmt(assignModalItem.price)}</p>
             </div>
-            <div className="max-h-64 overflow-y-auto">
+            {/* Scrollable attendee list */}
+            <div className="flex-1 overflow-y-auto">
+              <button
+                type="button"
+                onClick={toggleAssignAll}
+                className="flex w-full items-center gap-3 border-b border-zinc-100 px-4 py-3 hover:bg-zinc-50"
+              >
+                <Checkbox checked={attendees.length > 0 && attendees.every(a => assignSelected.includes(a.id))} />
+                <p className="text-sm font-medium text-zinc-500">Select all</p>
+              </button>
               {attendees.map(a => {
                 const sel = assignSelected.includes(a.id)
                 const share = assignSelected.length > 0 && sel
@@ -420,31 +664,168 @@ export function SplitDetail({
                     <Checkbox checked={sel} />
                     <div className="min-w-0 flex-1 text-left">
                       <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
-                      {share && <p className="text-xs text-zinc-400">{share}</p>}
+                      {share && <p className="text-xs text-zinc-400">{share} each</p>}
                     </div>
                   </button>
                 )
               })}
             </div>
-            <div className="border-t border-zinc-100 px-4 py-4">
+            {/* Sticky Save */}
+            <div className="shrink-0 border-t border-zinc-100 bg-white px-4 py-4">
               <button
                 type="button"
                 onClick={handleConfirmAssign}
                 disabled={assignSelected.length === 0}
                 className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
-                {assignSelected.length === 0
-                  ? 'Select people'
-                  : `Assign to ${assignSelected.length} ${assignSelected.length === 1 ? 'person' : 'people'}`}
+                Save
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Merge modal */}
+      {/* ── Assign by line bottom sheet ──────────────────────────────────────── */}
+      {showAssignByLine && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowAssignByLine(false)} />
+          <div className="relative flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+            {/* Header */}
+            <div className="shrink-0 border-b border-zinc-100 px-4 py-4">
+              <p className="text-sm font-semibold text-zinc-900">Assign by line</p>
+              <p className="mt-0.5 text-xs text-zinc-400">Expand each item to assign it. All matching rows are updated at once.</p>
+            </div>
+
+            {/* Scrollable item groups */}
+            <div className="flex-1 overflow-y-auto">
+              {Object.entries(lineGroups).map(([desc, g]) => {
+                const group = itemsByDescription[desc] ?? []
+                const total = group.reduce((s, i) => s + i.price, 0)
+                const selCount = g.combineUnits
+                  ? g.sharedAttendees.length
+                  : Object.values(g.unitAssignments).filter(Boolean).length
+                const allSharedSelected = attendees.length > 0 && attendees.every(a => g.sharedAttendees.includes(a.id))
+
+                return (
+                  <div key={desc} className="border-b border-zinc-100 last:border-0">
+                    {/* Collapsed row / expand trigger */}
+                    <button
+                      type="button"
+                      onClick={() => toggleGroupExpanded(desc)}
+                      className="flex w-full items-center gap-3 px-4 py-3.5 hover:bg-zinc-50"
+                    >
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="truncate text-sm font-semibold text-zinc-900">{desc}</p>
+                        <p className="text-xs text-zinc-400">
+                          {group.length > 1 ? `${group.length}× · ` : ''}{fmt(total)}
+                          {selCount > 0 && (
+                            <span className="ml-1.5 font-medium text-zinc-600">
+                              · {g.combineUnits
+                                  ? `${selCount === attendees.length ? 'All' : selCount} selected`
+                                  : `${selCount} of ${group.length} assigned`}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <ChevronDown open={g.expanded} />
+                    </button>
+
+                    {/* Expanded content */}
+                    {g.expanded && (
+                      <div className="border-t border-zinc-100 bg-zinc-50/50 pb-2">
+                        {/* Combine units toggle */}
+                        {group.length > 1 && (
+                          <div className="flex items-center justify-between px-4 py-3">
+                            <div>
+                              <p className="text-sm font-medium text-zinc-900">Combine units</p>
+                              <p className="text-xs text-zinc-400">
+                                {g.combineUnits
+                                  ? 'Cost shared equally among selected people'
+                                  : 'Each unit assigned to a different person'}
+                              </p>
+                            </div>
+                            <Toggle checked={g.combineUnits} onChange={() => toggleCombineUnits(desc)} />
+                          </div>
+                        )}
+
+                        {g.combineUnits ? (
+                          /* Shared attendee checklist */
+                          <div className="mt-1">
+                            <button
+                              type="button"
+                              onClick={() => toggleSharedAll(desc)}
+                              className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-zinc-100"
+                            >
+                              <Checkbox checked={allSharedSelected} />
+                              <p className="text-sm text-zinc-500">Select all</p>
+                            </button>
+                            {attendees.map(a => {
+                              const sel = g.sharedAttendees.includes(a.id)
+                              const share = g.sharedAttendees.length > 0 && sel
+                                ? fmt(total / g.sharedAttendees.length)
+                                : null
+                              return (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  onClick={() => toggleSharedAttendee(desc, a.id)}
+                                  className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-zinc-100"
+                                >
+                                  <Checkbox checked={sel} />
+                                  <div className="min-w-0 flex-1 text-left">
+                                    <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
+                                    {share && <p className="text-xs text-zinc-400">{share} each</p>}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          /* Per-unit selectors */
+                          <div className="mt-1 space-y-1 px-4 pb-1">
+                            {group.map((item, idx) => (
+                              <div key={item.id} className="flex items-center gap-3">
+                                <p className="w-14 shrink-0 text-xs text-zinc-400">Unit {idx + 1}</p>
+                                <select
+                                  value={g.unitAssignments[item.id] ?? ''}
+                                  onChange={e => setUnitAttendee(desc, item.id, e.target.value)}
+                                  className="flex-1 rounded-lg px-2 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                                >
+                                  <option value="">Unassigned</option>
+                                  {attendees.map(a => (
+                                    <option key={a.id} value={a.id}>{a.display_name}</option>
+                                  ))}
+                                </select>
+                                <span className="w-14 shrink-0 text-right text-xs text-zinc-400">{fmt(item.price)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Sticky Save assignments */}
+            <div className="shrink-0 border-t border-zinc-200 bg-white px-4 py-4">
+              <button
+                type="button"
+                onClick={handleConfirmAssignByLine}
+                disabled={busy || !lineGroupsHaveSelection}
+                className="w-full rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {busy ? 'Saving…' : 'Save assignments'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Merge modal ─────────────────────────────────────────────────────── */}
       {showMerge && (
-        <div className="fixed inset-0 z-40 flex items-end">
+        <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setShowMerge(false)} />
           <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
             <div className="border-b border-zinc-100 px-4 py-4">

@@ -40,7 +40,8 @@ export async function assignItem(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  await supabase.from('item_assignments').delete().eq('item_id', itemId)
+  const { error: deleteError } = await supabase.from('item_assignments').delete().eq('item_id', itemId)
+  if (deleteError) throw new Error('Failed to clear existing assignment.')
 
   if (attendeeIds.length > 0) {
     const { error } = await supabase.from('item_assignments').insert(
