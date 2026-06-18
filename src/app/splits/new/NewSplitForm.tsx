@@ -223,20 +223,16 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   // ── Step 3: Receipt ────────────────────────────────────────────────────────
 
-  console.log('step 3 render — receipt:', receipt?.name ?? null, receipt?.size ?? null)
-
   return (
-    <div className="pb-24">
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       <StepIndicator step={3} />
       <div>
         <h2 className="text-lg font-semibold text-zinc-900">Upload the receipt</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Take a photo or choose from your gallery. You can also skip and add it later.
+          Load a photo of the receipt to split the bill.
         </p>
       </div>
 
-      {/* Receipt preview or upload trigger */}
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
@@ -253,11 +249,10 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
           <>
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true"
               stroke="#a1a1aa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+              <circle cx="12" cy="13" r="4" />
             </svg>
-            <p className="mt-3 text-sm font-medium text-zinc-500">Tap to take a photo or choose a file</p>
+            <p className="mt-3 text-sm font-medium text-zinc-500">Tap to choose a photo</p>
           </>
         )}
       </button>
@@ -287,16 +282,42 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         >
           Back
         </button>
-        <button
-          type="button"
-          onClick={() => { console.log('button clicked'); handleSubmit() }}
-          disabled={loading}
-          className="flex-1 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {(() => { console.log('button label eval — loading:', loading, 'receipt:', receipt?.name ?? null); return loading ? 'Creating…' : receipt ? 'Create Split' : 'Skip & Create' })()}
-        </button>
+        {receipt ? (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                Creating…
+              </>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Create Split
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+            </svg>
+            Load file
+          </button>
+        )}
       </div>
-    </div>
     </div>
   )
 }

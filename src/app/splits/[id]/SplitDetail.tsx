@@ -106,8 +106,6 @@ export function SplitDetail({
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [rawText, setRawText] = useState<string | null>(null)
-  const [showRawText, setShowRawText] = useState(false)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -150,8 +148,7 @@ export function SplitDetail({
         body: JSON.stringify({ image: base64 }),
       })
       if (!ocrRes.ok) throw new Error()
-      const { items: ocrItems, total, rawText: raw } = await ocrRes.json()
-      setRawText(raw ?? null)
+      const { items: ocrItems, total } = await ocrRes.json()
       if (!ocrItems?.length) {
         setError('No items detected in the receipt. Try again or contact support.')
         return
@@ -434,23 +431,6 @@ export function SplitDetail({
               )}
             </button>
           )}
-          {rawText && (
-            <div className="mt-6 w-full max-w-xs rounded-xl bg-zinc-50 ring-1 ring-zinc-200">
-              <button
-                type="button"
-                onClick={() => setShowRawText(v => !v)}
-                className="flex w-full items-center justify-between px-4 py-3 text-xs font-medium text-zinc-500"
-              >
-                Raw OCR output
-                <span aria-hidden="true">{showRawText ? '▲' : '▼'}</span>
-              </button>
-              {showRawText && (
-                <pre className="max-h-64 overflow-y-auto border-t border-zinc-200 p-4 text-xs text-zinc-600 font-mono whitespace-pre-wrap break-words">
-                  {rawText}
-                </pre>
-              )}
-            </div>
-          )}
         </main>
       </>
     )
@@ -469,59 +449,51 @@ export function SplitDetail({
             </button>
             <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900">{split.title}</h1>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={openAssignByLine}
               disabled={busy}
-              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
             >
-              Assign by line
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                <circle cx="3" cy="6" r="0.5" fill="currentColor" /><circle cx="3" cy="12" r="0.5" fill="currentColor" /><circle cx="3" cy="18" r="0.5" fill="currentColor" />
+              </svg>
+              Assign
             </button>
             <button
               type="button"
               onClick={handleEqualSplit}
               disabled={busy}
-              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
             >
-              Split equally
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <circle cx="12" cy="6" r="1" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" />
+              </svg>
+              Equal
             </button>
             <button
               type="button"
               onClick={handleFinalise}
               disabled={!allAssigned || busy}
-              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                allAssigned ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-zinc-100 text-zinc-400'
+              }`}
             >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
               Finalise
             </button>
           </div>
         </div>
       </header>
 
-      <main className="flex flex-1 gap-3 px-4 py-4 pb-28">
-        {/* Raw OCR panel */}
-        {rawText && (
-          <div className="w-2/5 shrink-0">
-            <div className="sticky top-20 overflow-hidden rounded-xl bg-zinc-50 ring-1 ring-zinc-200">
-              <button
-                type="button"
-                onClick={() => setShowRawText(v => !v)}
-                className="flex w-full items-center justify-between px-3 py-2.5 text-xs font-medium text-zinc-500"
-              >
-                Raw OCR
-                <span aria-hidden="true">{showRawText ? '▲' : '▼'}</span>
-              </button>
-              {showRawText && (
-                <pre className="max-h-[60vh] overflow-y-auto border-t border-zinc-200 p-3 text-xs text-zinc-600 font-mono whitespace-pre-wrap break-words">
-                  {rawText}
-                </pre>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Main content */}
-        <div className="min-w-0 flex-1 space-y-4">
+      <main className="space-y-4 px-4 py-4 pb-28">
+        <div className="space-y-4">
           {signedReceiptUrl && (
             <button
               type="button"
