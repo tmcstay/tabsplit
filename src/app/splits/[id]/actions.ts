@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { generateId } from '@/lib/uuid'
 
 interface ItemInput {
   description: string
@@ -81,7 +82,7 @@ export async function finaliseSplit(splitId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const token = crypto.randomUUID()
+  const token = generateId()
 
   const [{ error: statusErr }, { error: linkErr }] = await Promise.all([
     supabase

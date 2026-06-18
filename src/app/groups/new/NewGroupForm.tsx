@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { generateId } from '@/lib/uuid'
 
 const DIAL_CODES = [
   { code: '+61', label: 'AU +61' },
@@ -68,7 +69,7 @@ async function tryImportContacts(): Promise<Member[] | null> {
     return contacts
       .filter((c: any) => c.name?.display)
       .map((c: any) => ({
-        id: crypto.randomUUID(),
+        id: generateId(),
         display_name: c.name.display as string,
         phone: c.phones?.[0]?.number ?? null,
         email: null,
@@ -135,7 +136,7 @@ export function NewGroupForm({ userId }: Props) {
     }
     setMembers(prev => [
       ...prev,
-      { id: crypto.randomUUID(), display_name: newName.trim(), phone: phoneVal, email: emailVal },
+      { id: generateId(), display_name: newName.trim(), phone: phoneVal, email: emailVal },
     ])
     setNewName('')
     setNewPhone('')
@@ -160,7 +161,7 @@ export function NewGroupForm({ userId }: Props) {
       setMembers(prev => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           display_name: gm.display_name,
           phone: gm.phone,
           email: gm.email,

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSplit } from './actions'
+import { generateId } from '@/lib/uuid'
 
 interface Attendee {
   id: string
@@ -52,7 +53,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     if (!newName.trim()) return
     setAttendees(prev => [
       ...prev,
-      { id: crypto.randomUUID(), display_name: newName.trim(), phone: newPhone.trim() || null },
+      { id: generateId(), display_name: newName.trim(), phone: newPhone.trim() || null },
     ])
     setNewName('')
     setNewPhone('')

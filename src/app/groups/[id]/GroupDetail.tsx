@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Tables } from '@/types/database'
+import { generateId } from '@/lib/uuid'
 
 const DIAL_CODES = [
   { code: '+61', label: 'AU +61' },
@@ -150,7 +151,7 @@ export function GroupDetail({ group, members }: Props) {
     }
     setNewMembers(prev => [
       ...prev,
-      { id: crypto.randomUUID(), display_name: addName.trim(), phone: phoneVal, email: emailVal },
+      { id: generateId(), display_name: addName.trim(), phone: phoneVal, email: emailVal },
     ])
     setAddName('')
     setAddPhone('')
