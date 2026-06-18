@@ -137,9 +137,9 @@ export async function POST(request: NextRequest) {
 
   if (!visionRes.ok) {
     const detail = await visionRes.text()
-    console.error(`OCR: Vision API returned HTTP ${visionRes.status}:`, detail)
+    console.error(`OCR: Vision API returned HTTP ${visionRes.status} ${visionRes.statusText}:`, detail)
     return NextResponse.json(
-      { error: 'Vision API request failed.', detail },
+      { error: 'Vision API request failed.', visionStatus: visionRes.status, visionStatusText: visionRes.statusText, detail },
       { status: 502 }
     )
   }

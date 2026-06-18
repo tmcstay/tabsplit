@@ -64,9 +64,12 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null
-    setReceipt(file)
+    console.log('handleFileChange:', file ? { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified } : null)
+    // Mobile Safari can return a File with size=0 — treat as valid if it has a name
+    const validFile = file && (file.size > 0 || file.name.length > 0) ? file : null
+    setReceipt(validFile)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setPreviewUrl(file ? URL.createObjectURL(file) : null)
+    setPreviewUrl(validFile ? URL.createObjectURL(validFile) : null)
   }
 
   async function handleSubmit() {
