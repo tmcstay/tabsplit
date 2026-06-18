@@ -30,6 +30,7 @@ export interface Database {
           display_name?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       groups: {
         Row: {
@@ -53,6 +54,7 @@ export interface Database {
           saved?: boolean
           created_at?: string
         }
+        Relationships: []
       }
       group_members: {
         Row: {
@@ -82,6 +84,7 @@ export interface Database {
           user_id?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       splits: {
         Row: {
@@ -114,6 +117,7 @@ export interface Database {
           status?: SplitStatus
           created_at?: string
         }
+        Relationships: []
       }
       attendee_groups: {
         Row: {
@@ -134,6 +138,7 @@ export interface Database {
           label?: string
           created_at?: string
         }
+        Relationships: []
       }
       attendees: {
         Row: {
@@ -166,6 +171,7 @@ export interface Database {
           group_id?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       items: {
         Row: {
@@ -192,6 +198,7 @@ export interface Database {
           sort_order?: number
           created_at?: string
         }
+        Relationships: []
       }
       item_assignments: {
         Row: {
@@ -212,6 +219,7 @@ export interface Database {
           attendee_id?: string
           created_at?: string
         }
+        Relationships: []
       }
       share_links: {
         Row: {
@@ -235,10 +243,15 @@ export interface Database {
           expires_at?: string | null
           created_at?: string
         }
+        Relationships: []
       }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
     Enums: {
       split_status: SplitStatus
     }

@@ -65,7 +65,9 @@ export function GroupDetail({ group, members }: Props) {
 
   // Sync local state when server refreshes props
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChecked(Object.fromEntries(members.map(m => [m.id, true])))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalMembers(members)
   }, [members])
 

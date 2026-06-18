@@ -27,7 +27,7 @@ export async function saveItems(
   )
   if (error) throw new Error('Failed to save items.')
 
-  const updatePayload: Record<string, unknown> = { status: 'draft' }
+  const updatePayload: { status: 'draft'; total?: number } = { status: 'draft' }
   if (total != null) updatePayload.total = total
   await supabase.from('splits').update(updatePayload).eq('id', splitId)
 }

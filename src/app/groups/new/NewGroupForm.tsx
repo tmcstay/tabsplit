@@ -54,22 +54,19 @@ function StepIndicator({ step }: { step: Step }) {
   )
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 async function tryImportContacts(): Promise<Member[] | null> {
   try {
     const isNative =
       typeof window !== 'undefined' &&
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).Capacitor?.isNativePlatform?.()
     if (!isNative) return null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { Contacts } = await import('@capacitor/contacts' as any)
+    const { Contacts } = await import('@capacitor-community/contacts' as any)
     const { contacts } = await Contacts.getContacts({
       projection: { name: true, phones: true },
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return contacts
       .filter((c: any) => c.name?.display)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((c: any) => ({
         id: crypto.randomUUID(),
         display_name: c.name.display as string,
@@ -80,6 +77,7 @@ async function tryImportContacts(): Promise<Member[] | null> {
     return null
   }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const inputClass =
   'w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900'
@@ -234,7 +232,7 @@ export function NewGroupForm({ userId }: Props) {
         <div>
           <h2 className="text-lg font-semibold text-zinc-900">Name your group</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Give this group a name you'll recognise later.
+            Give this group a name you&apos;ll recognise later.
           </p>
         </div>
         <div>

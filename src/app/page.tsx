@@ -66,7 +66,7 @@ export default async function HomePage() {
               Saved Groups
             </h2>
             <div className="flex gap-3 overflow-x-auto px-4 pb-1">
-              {(groups as GroupWithCount[]).map(group => (
+              {(groups as unknown as GroupWithCount[]).map(group => (
                 <GroupCard key={group.id} group={group} />
               ))}
             </div>
@@ -77,7 +77,7 @@ export default async function HomePage() {
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
             Recent Splits
           </h2>
-          <SplitList initialSplits={(splits ?? []) as SplitWithCount[]} />
+          <SplitList initialSplits={(splits ?? []) as unknown as SplitWithCount[]} />
         </section>
       </main>
 

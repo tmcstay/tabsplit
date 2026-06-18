@@ -137,7 +137,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <div className="space-y-6">
         <StepIndicator step={2} />
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Who's splitting?</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Who&apos;s splitting?</h2>
           <p className="mt-1 text-sm text-zinc-500">
             {groupName ? `Pre-filled from ${groupName}. Remove anyone who isn't here.` : 'Add everyone sharing this bill.'}
           </p>

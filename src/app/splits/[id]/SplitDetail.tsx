@@ -110,6 +110,7 @@ export function SplitDetail({
   const [showRawText, setShowRawText] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAssignments(
       Object.fromEntries(items.map(item => [item.id, initialAssignments[item.id] ?? []]))
     )
