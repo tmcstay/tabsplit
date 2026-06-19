@@ -11,7 +11,7 @@ let package = Package(
             targets: ["CapApp-SPM"])
     ],
     dependencies: [
-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.0"),
+        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "7.6.6"),
         .package(name: "CapacitorCommunityContacts", path: "..\..\..\node_modules\@capacitor-community\contacts")
     ],
     targets: [
