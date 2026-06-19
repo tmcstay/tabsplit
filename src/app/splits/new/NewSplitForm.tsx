@@ -42,6 +42,8 @@ async function tryImportContacts(): Promise<Attendee[] | null> {
       (window as any).Capacitor?.isNativePlatform?.()
     if (!isNative) return null
     const { Contacts } = await import('@capacitor-community/contacts' as any)
+    const { contacts: permission } = await Contacts.requestPermissions()
+    if (permission !== 'granted') return null
     const { contacts } = await Contacts.getContacts({
       projection: { name: true, phones: true, emails: true },
     })
