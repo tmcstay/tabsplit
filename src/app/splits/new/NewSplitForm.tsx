@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ interface Attendee {
   id: string
   display_name: string
   phone: string | null
+  email: string | null
 }
 
 interface Props {
@@ -26,12 +27,37 @@ function StepIndicator({ step }: { step: Step }) {
       {([1, 2, 3] as Step[]).map(s => (
         <div
           key={s}
-          className={`h-1.5 w-8 rounded-full transition-colors ${step >= s ? 'bg-zinc-900' : 'bg-zinc-200'}`}
+          className={`h-1.5 w-8 rounded-full transition-colors ${step >= s ? 'bg-teal-600' : 'bg-slate-200'}`}
         />
       ))}
     </div>
   )
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function tryImportContacts(): Promise<Attendee[] | null> {
+  try {
+    const isNative =
+      typeof window !== 'undefined' &&
+      (window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) return null
+    const { Contacts } = await import('@capacitor-community/contacts' as any)
+    const { contacts } = await Contacts.getContacts({
+      projection: { name: true, phones: true, emails: true },
+    })
+    return contacts
+      .filter((c: any) => c.name?.display)
+      .map((c: any) => ({
+        id: generateId(),
+        display_name: c.name.display as string,
+        phone: c.phones?.[0]?.number ?? null,
+        email: c.emails?.[0]?.address ?? null,
+      }))
+  } catch {
+    return null
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees }: Props) {
   console.log('NewSplitForm render — initialAttendees:', initialAttendees.length, 'groupId:', groupId)
@@ -43,6 +69,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   const [attendees, setAttendees] = useState<Attendee[]>(initialAttendees)
   const [newName, setNewName] = useState('')
   const [newPhone, setNewPhone] = useState('')
+  const [newEmail, setNewEmail] = useState('')
   const [receipt, setReceipt] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -53,14 +80,29 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     if (!newName.trim()) return
     setAttendees(prev => [
       ...prev,
-      { id: generateId(), display_name: newName.trim(), phone: newPhone.trim() || null },
+      {
+        id: generateId(),
+        display_name: newName.trim(),
+        phone: newPhone.trim() || null,
+        email: newEmail.trim() || null,
+      },
     ])
     setNewName('')
     setNewPhone('')
+    setNewEmail('')
   }
 
   function removeAttendee(id: string) {
     setAttendees(prev => prev.filter(a => a.id !== id))
+  }
+
+  async function handleImportContacts() {
+    const contacts = await tryImportContacts()
+    if (contacts === null) return
+    setAttendees(prev => {
+      const existing = new Set(prev.map(a => a.display_name))
+      return [...prev, ...contacts.filter(c => !existing.has(c.display_name))]
+    })
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -83,7 +125,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       fd.append('title', title)
       fd.append('groupId', groupId ?? '')
       fd.append('attendees', JSON.stringify(
-        attendees.map(a => ({ display_name: a.display_name, phone: a.phone }))
+        attendees.map(a => ({ display_name: a.display_name, phone: a.phone, email: a.email }))
       ))
       if (receipt) fd.append('receipt', receipt)
 
@@ -104,13 +146,13 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <div className="space-y-6">
         <StepIndicator step={1} />
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Name this split</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Name this split</h2>
           {groupName && (
-            <p className="mt-1 text-sm text-zinc-500">Splitting with {groupName}</p>
+            <p className="mt-1 text-sm text-slate-500">Splitting with {groupName}</p>
           )}
         </div>
         <div>
-          <label htmlFor="split-title" className="block text-sm font-medium text-zinc-700">
+          <label htmlFor="split-title" className="block text-sm font-medium text-slate-700">
             Split title
           </label>
           <input
@@ -120,14 +162,14 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
             value={title}
             onChange={e => setTitle(e.target.value)}
             autoFocus
-            className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+            className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
         <button
           type="button"
           onClick={() => setStep(2)}
           disabled={!title.trim()}
-          className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Continue
         </button>
@@ -142,8 +184,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <div className="space-y-6">
         <StepIndicator step={2} />
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Who&apos;s splitting?</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h2 className="text-lg font-semibold text-slate-900">Who&apos;s splitting?</h2>
+          <p className="mt-1 text-sm text-slate-500">
             {groupName ? `Pre-filled from ${groupName}. Remove anyone who isn't here.` : 'Add everyone sharing this bill.'}
           </p>
         </div>
@@ -152,15 +194,17 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         {attendees.length > 0 && (
           <ul className="space-y-2">
             {attendees.map(a => (
-              <li key={a.id} className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-zinc-200">
+              <li key={a.id} className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
-                  {a.phone && <p className="text-xs text-zinc-400">{a.phone}</p>}
+                  <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
+                  {(a.phone || a.email) && (
+                    <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => removeAttendee(a.id)}
-                  className="ml-3 shrink-0 text-zinc-400 hover:text-red-500"
+                  className="ml-3 shrink-0 text-slate-400 hover:text-red-500"
                   aria-label={`Remove ${a.display_name}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -174,37 +218,57 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         )}
 
         {/* Add attendee */}
-        <form onSubmit={addAttendee} className="space-y-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Name"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
-            />
-            <input
-              type="tel"
-              placeholder="Phone (optional)"
-              value={newPhone}
-              onChange={e => setNewPhone(e.target.value)}
-              className="w-36 rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
-            />
-          </div>
+        <form onSubmit={addAttendee} className="space-y-2.5">
+          <input
+            type="text"
+            placeholder="Name"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+          />
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            value={newPhone}
+            onChange={e => setNewPhone(e.target.value)}
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+          />
+          <input
+            type="email"
+            placeholder="Email (optional)"
+            value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+          />
           <button
             type="submit"
             disabled={!newName.trim()}
-            className="w-full rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50"
+            className="w-full rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
           >
             Add person
           </button>
         </form>
 
+        {/* Import from contacts (native only) */}
+        <button
+          type="button"
+          onClick={handleImportContacts}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 py-2.5 text-sm font-medium text-slate-500 hover:border-slate-400 hover:text-slate-700"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+            stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="9" cy="8" r="3.5" />
+            <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+            <path d="M19 8v6M16 11h6" />
+          </svg>
+          Import from contacts
+        </button>
+
         <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={() => setStep(1)}
-            className="flex-1 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
+            className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
             Back
           </button>
@@ -212,7 +276,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
             type="button"
             onClick={() => setStep(3)}
             disabled={attendees.length === 0}
-            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Continue
           </button>
@@ -227,8 +291,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     <div className="space-y-6 pb-32">
       <StepIndicator step={3} />
       <div>
-        <h2 className="text-lg font-semibold text-zinc-900">Upload the receipt</h2>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h2 className="text-lg font-semibold text-slate-900">Upload the receipt</h2>
+        <p className="mt-1 text-sm text-slate-500">
           Load a photo of the receipt to split the bill.
         </p>
       </div>
@@ -236,7 +300,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 py-10 transition-colors hover:border-zinc-400 hover:bg-zinc-100"
+        className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 py-10 transition-colors hover:border-slate-400 hover:bg-slate-100"
       >
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -248,11 +312,11 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         ) : (
           <>
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-              stroke="#a1a1aa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
-            <p className="mt-3 text-sm font-medium text-zinc-500">Tap to choose a photo</p>
+            <p className="mt-3 text-sm font-medium text-slate-500">Tap to choose a photo</p>
           </>
         )}
       </button>
@@ -267,7 +331,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       />
 
       {receipt && (
-        <p className="text-center text-xs text-zinc-400">{receipt.name}</p>
+        <p className="text-center text-xs text-slate-400">{receipt.name}</p>
       )}
 
       {error && (
@@ -278,7 +342,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         <button
           type="button"
           onClick={() => setStep(2)}
-          className="flex-1 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
+          className="flex-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
         >
           Back
         </button>

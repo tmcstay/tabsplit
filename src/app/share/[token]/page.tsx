@@ -101,43 +101,43 @@ export default async function SharePage({
   })
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-16">
+    <div className="min-h-screen bg-slate-50 pb-16">
       {/* Header */}
-      <header className="border-b border-zinc-200 bg-white px-4 py-5">
+      <header className="border-b border-slate-200 bg-white px-4 py-5">
         <div className="mx-auto max-w-lg">
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">TabSplit</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">{split.title}</h1>
-          <p className="text-sm text-zinc-400">{dateStr}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">TabSplit</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{split.title}</h1>
+          <p className="text-sm text-slate-400">{dateStr}</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg space-y-4 px-4 py-6">
         {/* Grand total */}
         {split.total != null && (
-          <div className="rounded-xl bg-zinc-900 px-5 py-4 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Total</p>
+          <div className="rounded-xl bg-slate-900 px-5 py-4 text-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
         )}
 
         {/* Per-person breakdown */}
         {results.map(person => (
-          <div key={person.id} className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-200">
+          <div key={person.id} className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
             <div className="flex items-center justify-between px-4 py-4">
               <div>
-                <p className="font-semibold text-zinc-900">{person.label}</p>
-                <p className="text-xs text-zinc-400">
+                <p className="font-semibold text-slate-900">{person.label}</p>
+                <p className="text-xs text-slate-400">
                   {person.itemLines.length} item{person.itemLines.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <p className="text-xl font-bold text-zinc-900">${person.total.toFixed(2)}</p>
+              <p className="text-xl font-bold text-slate-900">${person.total.toFixed(2)}</p>
             </div>
             {person.itemLines.length > 0 && (
-              <div className="border-t border-zinc-100">
+              <div className="border-t border-slate-100">
                 {person.itemLines.map((line, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="text-zinc-600">{line.description}</span>
-                    <span className="font-medium text-zinc-900">${line.share.toFixed(2)}</span>
+                    <span className="text-slate-600">{line.description}</span>
+                    <span className="font-medium text-slate-900">${line.share.toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -145,7 +145,7 @@ export default async function SharePage({
           </div>
         ))}
 
-        <p className="text-center text-xs text-zinc-400">
+        <p className="text-center text-xs text-slate-400">
           Split calculated by TabSplit · Read only
         </p>
       </main>

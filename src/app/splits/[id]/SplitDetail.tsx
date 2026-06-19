@@ -57,7 +57,7 @@ function ChevronDown({ open }: { open: boolean }) {
 function Checkbox({ checked }: { checked: boolean }) {
   return (
     <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-      checked ? 'border-zinc-900 bg-zinc-900' : 'border-zinc-300 bg-white'
+      checked ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'
     }`}>
       {checked && <CheckIcon />}
     </span>
@@ -72,7 +72,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
       aria-checked={checked}
       onClick={onChange}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-        checked ? 'bg-zinc-900' : 'bg-zinc-300'
+        checked ? 'bg-teal-600' : 'bg-slate-300'
       }`}
     >
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -112,7 +112,6 @@ export function SplitDetail({
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeAssignAll, setChargeAssignAll] = useState(true)
   const [appFeeMode, setAppFeeMode] = useState<'host' | 'individual'>('host')
-  const [appFeeHostId, setAppFeeHostId] = useState<string>('')
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -128,6 +127,9 @@ export function SplitDetail({
     0
   )
   const unassignedCount = items.filter(i => !(assignments[i.id] ?? []).length).length
+
+  // The organiser is always the host for app fee purposes
+  const hostAttendee = attendees.find(a => a.user_id === split.organiser_id) ?? null
 
   const itemsByDescription = items.reduce((map, item) => {
     if (!map[item.description]) map[item.description] = []
@@ -222,10 +224,8 @@ export function SplitDetail({
       const firstAssigned = assignments[group[0].id] ?? []
       const allSame = group.every(i => (assignments[i.id] ?? []).join() === firstAssigned.join())
       if (allSame && firstAssigned.length > 0) {
-        // All units already assigned the same way — pre-populate combined
         initial[desc] = { expanded: false, combineUnits: true, sharedAttendees: firstAssigned, unitAssignments: {} }
       } else if (!allSame) {
-        // Mixed assignments — default to per-unit
         const unitAssignments: Record<string, string> = {}
         group.forEach(item => {
           const a = assignments[item.id] ?? []
@@ -255,7 +255,6 @@ export function SplitDetail({
         [desc]: {
           ...g,
           combineUnits: !g.combineUnits,
-          // clear incompatible selections when switching modes
           sharedAttendees: !g.combineUnits ? [] : g.sharedAttendees,
           unitAssignments: g.combineUnits ? {} : g.unitAssignments,
         },
@@ -374,12 +373,13 @@ export function SplitDetail({
     const totalEntered = Math.round(parseFloat(chargeAmount) * 100) / 100
     if (!desc || isNaN(totalEntered) || totalEntered <= 0) return
 
-    // For app fee individual mode: price = per-person × non-host count, assign only to non-hosts
     let finalPrice = totalEntered
     let attendeeIds: string[] | null = chargeAssignAll ? null : []
     if (chargeType === 'app' && appFeeMode === 'individual') {
       const perPerson = totalEntered / attendees.length
-      const nonHosts = attendees.filter(a => a.id !== appFeeHostId)
+      const nonHosts = hostAttendee
+        ? attendees.filter(a => a.id !== hostAttendee.id)
+        : attendees
       finalPrice = Math.round(perPerson * nonHosts.length * 100) / 100
       attendeeIds = nonHosts.map(a => a.id)
     }
@@ -394,7 +394,6 @@ export function SplitDetail({
       setChargeAmount('')
       setChargeAssignAll(true)
       setAppFeeMode('host')
-      setAppFeeHostId('')
       router.refresh()
     } catch {
       setError('Failed to add charge.')
@@ -425,12 +424,12 @@ export function SplitDetail({
   if (items.length === 0) {
     return (
       <>
-        <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 py-4">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => router.back()} className="text-zinc-400 hover:text-zinc-600" aria-label="Go back">
+            <button type="button" onClick={() => router.back()} className="text-slate-400 hover:text-slate-600" aria-label="Go back">
               <BackIcon />
             </button>
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">{split.title}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{split.title}</h1>
           </div>
         </header>
 
@@ -440,13 +439,13 @@ export function SplitDetail({
             <img
               src={signedReceiptUrl}
               alt="Receipt"
-              className="mb-6 max-h-52 w-full max-w-xs rounded-xl object-contain shadow-sm ring-1 ring-zinc-200"
+              className="mb-6 max-h-52 w-full max-w-xs rounded-xl object-contain shadow-sm ring-1 ring-slate-200"
             />
           )}
-          <h2 className="text-lg font-semibold text-zinc-900">
+          <h2 className="text-lg font-semibold text-slate-900">
             {signedReceiptUrl ? 'Scan your receipt' : 'No receipt uploaded'}
           </h2>
-          <p className="mt-2 max-w-xs text-sm text-zinc-500">
+          <p className="mt-2 max-w-xs text-sm text-slate-500">
             {signedReceiptUrl
               ? 'Tap below to automatically extract line items using OCR.'
               : 'A receipt was not uploaded with this split.'}
@@ -459,7 +458,7 @@ export function SplitDetail({
               type="button"
               onClick={handleScanReceipt}
               disabled={scanning}
-              className="mt-6 flex items-center gap-2 rounded-2xl bg-zinc-900 px-6 py-3.5 text-sm font-semibold text-white disabled:opacity-50"
+              className="mt-6 flex items-center gap-2 rounded-2xl bg-teal-600 px-6 py-3.5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {scanning ? (
                 <>
@@ -489,13 +488,13 @@ export function SplitDetail({
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 py-3">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <button type="button" onClick={() => router.back()} className="shrink-0 text-zinc-400 hover:text-zinc-600" aria-label="Go back">
+            <button type="button" onClick={() => router.back()} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Go back">
               <BackIcon />
             </button>
-            <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900">{split.title}</h1>
+            <h1 className="truncate text-lg font-bold tracking-tight text-slate-900">{split.title}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
@@ -528,7 +527,7 @@ export function SplitDetail({
               onClick={handleFinalise}
               disabled={!allAssigned || busy}
               className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                allAssigned ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-zinc-100 text-zinc-400'
+                allAssigned ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-100 text-slate-400'
               }`}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -546,11 +545,11 @@ export function SplitDetail({
             <button
               type="button"
               onClick={() => setShowReceiptFull(true)}
-              className="block w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-zinc-200"
+              className="block w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-slate-200"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={signedReceiptUrl} alt="Receipt" className="max-h-28 w-full object-cover" />
-              <p className="bg-zinc-50 py-1.5 text-center text-xs text-zinc-400">Tap to view full receipt</p>
+              <p className="bg-slate-50 py-1.5 text-center text-xs text-slate-400">Tap to view full receipt</p>
             </button>
           )}
 
@@ -558,7 +557,7 @@ export function SplitDetail({
             <button
               type="button"
               onClick={() => { setShowMerge(true); setMergeSelected([]); setMergeLabel('') }}
-              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
+              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="9" cy="8" r="3" />
@@ -570,7 +569,7 @@ export function SplitDetail({
             <button
               type="button"
               onClick={() => setShowAddCharge(true)}
-              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600"
+              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
@@ -594,14 +593,14 @@ export function SplitDetail({
                 <li
                   key={item.id}
                   className={`rounded-xl px-4 py-3 shadow-sm ring-1 ${
-                    isAssigned ? 'bg-white ring-zinc-200' : 'bg-amber-50 ring-amber-200'
+                    isAssigned ? 'bg-white ring-slate-200' : 'bg-amber-50 ring-amber-200'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-900">{item.description}</p>
+                      <p className="truncate text-sm font-medium text-slate-900">{item.description}</p>
                       {isAssigned ? (
-                        <p className="mt-0.5 truncate text-xs text-zinc-400">
+                        <p className="mt-0.5 truncate text-xs text-slate-400">
                           {assigned
                             .map(id => attendees.find(a => a.id === id)?.display_name ?? '?')
                             .join(', ')}
@@ -612,13 +611,13 @@ export function SplitDetail({
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900">{fmt(item.price)}</span>
+                      <span className="text-sm font-semibold text-slate-900">{fmt(item.price)}</span>
                       <button
                         type="button"
                         onClick={() => openAssignModal(item.id)}
                         className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                           isAssigned
-                            ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             : 'bg-amber-500 text-white hover:bg-amber-600'
                         }`}
                       >
@@ -634,14 +633,14 @@ export function SplitDetail({
       </main>
 
       {/* Summary bar */}
-      <div className="fixed inset-x-0 bottom-16 border-t border-zinc-200 bg-white px-4 py-2.5">
+      <div className="fixed inset-x-0 bottom-16 border-t border-slate-200 bg-white px-4 py-2.5">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-zinc-500">
-            Assigned: <span className="font-semibold text-zinc-900">{fmt(totalAssigned)}</span>
+          <span className="text-slate-500">
+            Assigned: <span className="font-semibold text-slate-900">{fmt(totalAssigned)}</span>
           </span>
           {split.total != null && (
-            <span className="text-zinc-500">
-              Total: <span className="font-semibold text-zinc-900">{fmt(split.total)}</span>
+            <span className="text-slate-500">
+              Total: <span className="font-semibold text-slate-900">{fmt(split.total)}</span>
             </span>
           )}
           {unassignedCount > 0 && (
@@ -668,21 +667,19 @@ export function SplitDetail({
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setAssignModalItemId(null)} />
           <div className="relative flex max-h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
-            {/* Header */}
-            <div className="shrink-0 border-b border-zinc-100 px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Assign item</p>
-              <p className="mt-1 truncate text-sm font-semibold text-zinc-900">{assignModalItem.description}</p>
-              <p className="text-sm text-zinc-500">{fmt(assignModalItem.price)}</p>
+            <div className="shrink-0 border-b border-slate-100 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Assign item</p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-900">{assignModalItem.description}</p>
+              <p className="text-sm text-slate-500">{fmt(assignModalItem.price)}</p>
             </div>
-            {/* Scrollable attendee list */}
             <div className="flex-1 overflow-y-auto">
               <button
                 type="button"
                 onClick={toggleAssignAll}
-                className="flex w-full items-center gap-3 border-b border-zinc-100 px-4 py-3 hover:bg-zinc-50"
+                className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50"
               >
                 <Checkbox checked={attendees.length > 0 && attendees.every(a => assignSelected.includes(a.id))} />
-                <p className="text-sm font-medium text-zinc-500">Select all</p>
+                <p className="text-sm font-medium text-slate-500">Select all</p>
               </button>
               {attendees.map(a => {
                 const sel = assignSelected.includes(a.id)
@@ -694,24 +691,23 @@ export function SplitDetail({
                     key={a.id}
                     type="button"
                     onClick={() => toggleAssignSelect(a.id)}
-                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-50"
+                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-50"
                   >
                     <Checkbox checked={sel} />
                     <div className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
-                      {share && <p className="text-xs text-zinc-400">{share} each</p>}
+                      <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
+                      {share && <p className="text-xs text-slate-400">{share} each</p>}
                     </div>
                   </button>
                 )
               })}
             </div>
-            {/* Sticky Save */}
-            <div className="shrink-0 border-t border-zinc-100 bg-white px-4 py-4">
+            <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-4">
               <button
                 type="button"
                 onClick={handleConfirmAssign}
                 disabled={assignSelected.length === 0}
-                className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 Save
               </button>
@@ -725,13 +721,11 @@ export function SplitDetail({
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setShowAssignByLine(false)} />
           <div className="relative flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
-            {/* Header */}
-            <div className="shrink-0 border-b border-zinc-100 px-4 py-4">
-              <p className="text-sm font-semibold text-zinc-900">Assign by line</p>
-              <p className="mt-0.5 text-xs text-zinc-400">Expand each item to assign it. All matching rows are updated at once.</p>
+            <div className="shrink-0 border-b border-slate-100 px-4 py-4">
+              <p className="text-sm font-semibold text-slate-900">Assign by line</p>
+              <p className="mt-0.5 text-xs text-slate-400">Expand each item to assign it. All matching rows are updated at once.</p>
             </div>
 
-            {/* Scrollable item groups */}
             <div className="flex-1 overflow-y-auto">
               {Object.entries(lineGroups).map(([desc, g]) => {
                 const group = itemsByDescription[desc] ?? []
@@ -742,19 +736,18 @@ export function SplitDetail({
                 const allSharedSelected = attendees.length > 0 && attendees.every(a => g.sharedAttendees.includes(a.id))
 
                 return (
-                  <div key={desc} className="border-b border-zinc-100 last:border-0">
-                    {/* Collapsed row / expand trigger */}
+                  <div key={desc} className="border-b border-slate-100 last:border-0">
                     <button
                       type="button"
                       onClick={() => toggleGroupExpanded(desc)}
-                      className="flex w-full items-center gap-3 px-4 py-3.5 hover:bg-zinc-50"
+                      className="flex w-full items-center gap-3 px-4 py-3.5 hover:bg-slate-50"
                     >
                       <div className="min-w-0 flex-1 text-left">
-                        <p className="truncate text-sm font-semibold text-zinc-900">{desc}</p>
-                        <p className="text-xs text-zinc-400">
+                        <p className="truncate text-sm font-semibold text-slate-900">{desc}</p>
+                        <p className="text-xs text-slate-400">
                           {group.length > 1 ? `${group.length}× · ` : ''}{fmt(total)}
                           {selCount > 0 && (
-                            <span className="ml-1.5 font-medium text-zinc-600">
+                            <span className="ml-1.5 font-medium text-slate-600">
                               · {g.combineUnits
                                   ? `${selCount === attendees.length ? 'All' : selCount} selected`
                                   : `${selCount} of ${group.length} assigned`}
@@ -765,15 +758,13 @@ export function SplitDetail({
                       <ChevronDown open={g.expanded} />
                     </button>
 
-                    {/* Expanded content */}
                     {g.expanded && (
-                      <div className="border-t border-zinc-100 bg-zinc-50/50 pb-2">
-                        {/* Combine units toggle */}
+                      <div className="border-t border-slate-100 bg-slate-50/50 pb-2">
                         {group.length > 1 && (
                           <div className="flex items-center justify-between px-4 py-3">
                             <div>
-                              <p className="text-sm font-medium text-zinc-900">Combine units</p>
-                              <p className="text-xs text-zinc-400">
+                              <p className="text-sm font-medium text-slate-900">Combine units</p>
+                              <p className="text-xs text-slate-400">
                                 {g.combineUnits
                                   ? 'Cost shared equally among selected people'
                                   : 'Each unit assigned to a different person'}
@@ -784,15 +775,14 @@ export function SplitDetail({
                         )}
 
                         {g.combineUnits ? (
-                          /* Shared attendee checklist */
                           <div className="mt-1">
                             <button
                               type="button"
                               onClick={() => toggleSharedAll(desc)}
-                              className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-zinc-100"
+                              className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-slate-100"
                             >
                               <Checkbox checked={allSharedSelected} />
-                              <p className="text-sm text-zinc-500">Select all</p>
+                              <p className="text-sm text-slate-500">Select all</p>
                             </button>
                             {attendees.map(a => {
                               const sel = g.sharedAttendees.includes(a.id)
@@ -804,34 +794,33 @@ export function SplitDetail({
                                   key={a.id}
                                   type="button"
                                   onClick={() => toggleSharedAttendee(desc, a.id)}
-                                  className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-zinc-100"
+                                  className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-slate-100"
                                 >
                                   <Checkbox checked={sel} />
                                   <div className="min-w-0 flex-1 text-left">
-                                    <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
-                                    {share && <p className="text-xs text-zinc-400">{share} each</p>}
+                                    <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
+                                    {share && <p className="text-xs text-slate-400">{share} each</p>}
                                   </div>
                                 </button>
                               )
                             })}
                           </div>
                         ) : (
-                          /* Per-unit selectors */
                           <div className="mt-1 space-y-1 px-4 pb-1">
                             {group.map((item, idx) => (
                               <div key={item.id} className="flex items-center gap-3">
-                                <p className="w-14 shrink-0 text-xs text-zinc-400">Unit {idx + 1}</p>
+                                <p className="w-14 shrink-0 text-xs text-slate-400">Unit {idx + 1}</p>
                                 <select
                                   value={g.unitAssignments[item.id] ?? ''}
                                   onChange={e => setUnitAttendee(desc, item.id, e.target.value)}
-                                  className="flex-1 rounded-lg px-2 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                                  className="flex-1 rounded-lg px-2 py-2 text-sm text-slate-900 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
                                 >
                                   <option value="">Unassigned</option>
                                   {attendees.map(a => (
                                     <option key={a.id} value={a.id}>{a.display_name}</option>
                                   ))}
                                 </select>
-                                <span className="w-14 shrink-0 text-right text-xs text-zinc-400">{fmt(item.price)}</span>
+                                <span className="w-14 shrink-0 text-right text-xs text-slate-400">{fmt(item.price)}</span>
                               </div>
                             ))}
                           </div>
@@ -843,13 +832,12 @@ export function SplitDetail({
               })}
             </div>
 
-            {/* Sticky Save assignments */}
-            <div className="shrink-0 border-t border-zinc-200 bg-white px-4 py-4">
+            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4">
               <button
                 type="button"
                 onClick={handleConfirmAssignByLine}
                 disabled={busy || !lineGroupsHaveSelection}
-                className="w-full rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-40"
+                className="w-full rounded-2xl bg-teal-600 py-3.5 text-sm font-semibold text-white disabled:opacity-40"
               >
                 {busy ? 'Saving…' : 'Save assignments'}
               </button>
@@ -863,9 +851,9 @@ export function SplitDetail({
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setShowMerge(false)} />
           <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
-            <div className="border-b border-zinc-100 px-4 py-4">
-              <p className="text-sm font-semibold text-zinc-900">Merge attendees</p>
-              <p className="mt-0.5 text-xs text-zinc-400">Select two or more people to combine into a group.</p>
+            <div className="border-b border-slate-100 px-4 py-4">
+              <p className="text-sm font-semibold text-slate-900">Merge attendees</p>
+              <p className="mt-0.5 text-xs text-slate-400">Select two or more people to combine into a group.</p>
             </div>
             <div className="max-h-48 overflow-y-auto">
               {attendees.map(a => {
@@ -875,27 +863,27 @@ export function SplitDetail({
                     key={a.id}
                     type="button"
                     onClick={() => toggleMergeSelect(a.id)}
-                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-zinc-50"
+                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-50"
                   >
                     <Checkbox checked={sel} />
-                    <p className="truncate text-sm font-medium text-zinc-900">{a.display_name}</p>
+                    <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
                   </button>
                 )
               })}
             </div>
-            <div className="space-y-3 border-t border-zinc-100 px-4 py-4">
+            <div className="space-y-3 border-t border-slate-100 px-4 py-4">
               <input
                 type="text"
                 placeholder="Group label (e.g. Sam & Alex)"
                 value={mergeLabel}
                 onChange={e => setMergeLabel(e.target.value)}
-                className="w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
               />
               <button
                 type="button"
                 onClick={handleConfirmMerge}
                 disabled={mergeSelected.length < 2 || !mergeLabel.trim() || busy}
-                className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 Merge
               </button>
@@ -903,14 +891,15 @@ export function SplitDetail({
           </div>
         </div>
       )}
+
       {/* ── Add charge bottom sheet ──────────────────────────────────────────── */}
       {showAddCharge && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="fixed inset-0 bg-black/40" onClick={() => setShowAddCharge(false)} />
           <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
-            <div className="border-b border-zinc-100 px-4 py-4">
-              <p className="text-sm font-semibold text-zinc-900">Add charge</p>
-              <p className="mt-0.5 text-xs text-zinc-400">Add a tip, fee, or other charge to the bill.</p>
+            <div className="border-b border-slate-100 px-4 py-4">
+              <p className="text-sm font-semibold text-slate-900">Add charge</p>
+              <p className="mt-0.5 text-xs text-slate-400">Add a tip, fee, or other charge to the bill.</p>
             </div>
 
             <div className="space-y-4 px-4 py-4">
@@ -925,11 +914,11 @@ export function SplitDetail({
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => { setChargeType(opt.value); setChargeAmount(''); setAppFeeMode('host'); setAppFeeHostId('') }}
+                    onClick={() => { setChargeType(opt.value); setChargeAmount(''); setAppFeeMode('host') }}
                     className={`rounded-lg py-2 text-xs font-medium transition-colors ${
                       chargeType === opt.value
-                        ? 'bg-zinc-900 text-white'
-                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
                     {opt.label}
@@ -944,21 +933,21 @@ export function SplitDetail({
                   placeholder="Description"
                   value={chargeDesc}
                   onChange={e => setChargeDesc(e.target.value)}
-                  className="w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+                  className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
                 />
               )}
 
               {/* Tip percentage shortcuts */}
               {chargeType === 'tip' && subtotal > 0 && (
                 <div>
-                  <p className="mb-2 text-xs text-zinc-400">Bill subtotal: {fmt(subtotal)}</p>
+                  <p className="mb-2 text-xs text-slate-400">Bill subtotal: {fmt(subtotal)}</p>
                   <div className="flex gap-2">
                     {[10, 15, 18, 20].map(pct => (
                       <button
                         key={pct}
                         type="button"
                         onClick={() => setChargeAmount((Math.round(subtotal * pct) / 100).toFixed(2))}
-                        className="flex-1 rounded-lg bg-zinc-100 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-200"
+                        className="flex-1 rounded-lg bg-slate-100 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200"
                       >
                         {pct}%
                       </button>
@@ -969,8 +958,8 @@ export function SplitDetail({
 
               {/* App fee payment mode */}
               {chargeType === 'app' && (
-                <div className="space-y-3 rounded-xl bg-zinc-50 p-3">
-                  <p className="text-xs font-medium text-zinc-600">How was the fee charged?</p>
+                <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600">How was the fee charged?</p>
                   <div className="flex gap-2">
                     {([
                       { value: 'host',       label: 'Host paid total' },
@@ -979,11 +968,11 @@ export function SplitDetail({
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => { setAppFeeMode(opt.value); setAppFeeHostId('') }}
+                        onClick={() => setAppFeeMode(opt.value)}
                         className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
                           appFeeMode === opt.value
-                            ? 'bg-zinc-900 text-white'
-                            : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-100'
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
                         }`}
                       >
                         {opt.label}
@@ -992,26 +981,27 @@ export function SplitDetail({
                   </div>
 
                   {appFeeMode === 'host' && (
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-slate-400">
                       Full fee split equally — each person reimburses the host their share.
                     </p>
                   )}
 
                   {appFeeMode === 'individual' && (
                     <>
-                      <p className="text-xs text-zinc-400">
-                        Each person is billed their own share. Select the host to exclude them — they&apos;ll pay the app separately.
+                      <p className="text-xs text-slate-400">
+                        Each person is billed their own share. The host pays the app directly and is excluded from the split.
                       </p>
-                      <select
-                        value={appFeeHostId}
-                        onChange={e => setAppFeeHostId(e.target.value)}
-                        className="w-full rounded-lg px-3 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
-                      >
-                        <option value="">Host not listed as attendee</option>
-                        {attendees.map(a => (
-                          <option key={a.id} value={a.id}>{a.display_name}</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2.5 ring-1 ring-slate-200">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400" aria-hidden="true">
+                          <circle cx="12" cy="8" r="4" />
+                          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                        </svg>
+                        {hostAttendee ? (
+                          <p className="text-sm font-medium text-slate-900">{hostAttendee.display_name}</p>
+                        ) : (
+                          <p className="text-sm text-slate-400">Host not listed as an attendee</p>
+                        )}
+                      </div>
                     </>
                   )}
 
@@ -1021,18 +1011,17 @@ export function SplitDetail({
                     const perPerson = total / attendees.length
                     if (appFeeMode === 'host') {
                       return (
-                        <p className="text-xs text-zinc-500">
-                          {fmt(total)} ÷ {attendees.length} people = <span className="font-medium text-zinc-700">{fmt(perPerson)} each</span>
+                        <p className="text-xs text-slate-500">
+                          {fmt(total)} ÷ {attendees.length} people = <span className="font-medium text-slate-700">{fmt(perPerson)} each</span>
                         </p>
                       )
                     }
-                    const nonHostCount = attendees.length - (appFeeHostId ? 1 : 0)
-                    const hostName = appFeeHostId ? attendees.find(a => a.id === appFeeHostId)?.display_name : null
+                    const nonHostCount = attendees.length - (hostAttendee ? 1 : 0)
                     return (
-                      <div className="space-y-0.5 text-xs text-zinc-500">
+                      <div className="space-y-0.5 text-xs text-slate-500">
                         <p>{attendees.length} people × {fmt(perPerson)} = {fmt(total)} total</p>
-                        <p className="font-medium text-zinc-700">{nonHostCount} attendees charged {fmt(perPerson)} each in split</p>
-                        {hostName && <p className="text-zinc-400">{hostName} pays {fmt(perPerson)} directly to app provider</p>}
+                        <p className="font-medium text-slate-700">{nonHostCount} attendees charged {fmt(perPerson)} each in split</p>
+                        {hostAttendee && <p className="text-slate-400">{hostAttendee.display_name} pays {fmt(perPerson)} directly to app provider</p>}
                       </div>
                     )
                   })()}
@@ -1040,15 +1029,15 @@ export function SplitDetail({
               )}
 
               {/* Amount */}
-              <div className="flex items-center gap-2 rounded-lg px-3 shadow-sm ring-1 ring-zinc-300 focus-within:ring-2 focus-within:ring-zinc-900">
-                <span className="text-sm font-medium text-zinc-400">$</span>
+              <div className="flex items-center gap-2 rounded-lg px-3 shadow-sm ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-teal-500">
+                <span className="text-sm font-medium text-slate-400">$</span>
                 <input
                   type="number"
                   inputMode="decimal"
                   placeholder="0.00"
                   value={chargeAmount}
                   onChange={e => setChargeAmount(e.target.value)}
-                  className="flex-1 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none"
+                  className="flex-1 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none"
                 />
               </div>
 
@@ -1056,8 +1045,8 @@ export function SplitDetail({
               {chargeType !== 'app' && (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-zinc-900">Split equally</p>
-                    <p className="text-xs text-zinc-400">Assign to all attendees automatically</p>
+                    <p className="text-sm font-medium text-slate-900">Split equally</p>
+                    <p className="text-xs text-slate-400">Assign to all attendees automatically</p>
                   </div>
                   <Toggle checked={chargeAssignAll} onChange={() => setChargeAssignAll(v => !v)} />
                 </div>
@@ -1070,7 +1059,7 @@ export function SplitDetail({
                   !chargeAmount || parseFloat(chargeAmount) <= 0 ||
                   (chargeType === 'custom' && !chargeDesc.trim()) || busy
                 }
-                className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 {busy ? 'Adding…' : 'Add to bill'}
               </button>

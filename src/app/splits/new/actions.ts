@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 export interface Attendee {
   display_name: string
   phone: string | null
+  email: string | null
 }
 
 export async function createSplit(formData: FormData): Promise<string> {
@@ -55,6 +56,7 @@ export async function createSplit(formData: FormData): Promise<string> {
           split_id: split.id,
           display_name: a.display_name,
           phone: a.phone ?? null,
+          email: a.email ?? null,
         }))
       )
       if (attendeesErr) {

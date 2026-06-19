@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#18181b',
+  themeColor: '#0f172a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="en-AU"
       className={`${geistSans.variable} ${geistMono.variable} h-dvh antialiased`}
     >
-      <body className="h-full overflow-y-auto overscroll-none bg-zinc-50 font-sans text-zinc-900">
+      <body className="h-full overflow-y-auto overscroll-none bg-slate-50 font-sans text-slate-900">
         {children}
         <BottomNav />
         <Script id="eruda" strategy="afterInteractive">{`

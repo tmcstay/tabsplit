@@ -18,7 +18,7 @@ function ClientDate({ iso }: { iso: string }) {
 
 const STATUS_STYLES: Record<SplitStatus, { label: string; cls: string }> = {
   pending:   { label: 'Pending',   cls: 'bg-amber-50 text-amber-700' },
-  draft:     { label: 'Draft',     cls: 'bg-zinc-100 text-zinc-500' },
+  draft:     { label: 'Draft',     cls: 'bg-slate-100 text-slate-500' },
   finalised: { label: 'Finalised', cls: 'bg-green-50 text-green-700' },
 }
 
@@ -72,12 +72,12 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
     <div className="relative">
       <Link
         href={`/splits/${split.id}`}
-        className="block rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-zinc-200 active:bg-zinc-50"
+        className="block rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 pr-8">
-            <p className="truncate text-base font-semibold text-zinc-900">{split.title}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <p className="truncate text-base font-semibold text-slate-900">{split.title}</p>
+            <p className="mt-0.5 text-xs text-slate-400">
               <ClientDate iso={split.created_at} />
               {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
             </p>
@@ -93,7 +93,7 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
             <button
               type="button"
               onClick={handleCancelConfirm}
-              className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200"
+              className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
             >
               Cancel
             </button>
@@ -111,7 +111,7 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
           <button
             type="button"
             onClick={handleDelete}
-            className="rounded-lg p-1.5 text-zinc-300 hover:bg-red-50 hover:text-red-500"
+            className="rounded-lg p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500"
             aria-label={`Delete ${split.title}`}
           >
             <TrashIcon />
@@ -132,15 +132,15 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
   if (splits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-            stroke="#a1a1aa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="5" y="2" width="14" height="20" rx="2" />
             <path d="M9 7h6M9 11h6M9 15h4" />
           </svg>
         </div>
-        <p className="text-base font-semibold text-zinc-900">No splits yet</p>
-        <p className="mt-1.5 max-w-xs text-sm text-zinc-400">
+        <p className="text-base font-semibold text-slate-900">No splits yet</p>
+        <p className="mt-1.5 max-w-xs text-sm text-slate-400">
           Start by adding a group or a new split.
         </p>
       </div>

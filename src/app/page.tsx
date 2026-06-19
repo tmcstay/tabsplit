@@ -12,19 +12,19 @@ function GroupCard({ group }: { group: GroupWithCount }) {
   return (
     <Link
       href={`/groups/${group.id}`}
-      className="flex w-36 shrink-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 active:bg-zinc-50"
+      className="flex w-36 shrink-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
     >
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-          stroke="#a1a1aa" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          stroke="#94a3b8" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="9" cy="7" r="3.5" />
           <path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6" />
           <circle cx="17" cy="9" r="2.5" />
           <path d="M22 20c0-2.2-1.8-4-4-4" />
         </svg>
       </div>
-      <p className="truncate text-sm font-semibold text-zinc-900">{group.name}</p>
-      <p className="mt-0.5 text-xs text-zinc-400">
+      <p className="truncate text-sm font-semibold text-slate-900">{group.name}</p>
+      <p className="mt-0.5 text-xs text-slate-400">
         {count} {count === 1 ? 'member' : 'members'}
       </p>
     </Link>
@@ -55,14 +55,14 @@ export default async function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col pb-36">
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold tracking-tight text-zinc-900">TabSplit</h1>
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">TabSplit</h1>
       </header>
 
       <main className="flex-1 space-y-8 py-6">
         {hasSavedGroups && (
           <section>
-            <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Saved Groups
             </h2>
             <div className="flex gap-3 overflow-x-auto px-4 pb-1">
@@ -74,7 +74,7 @@ export default async function HomePage() {
         )}
 
         <section className="px-4">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent Splits
           </h2>
           <SplitList initialSplits={(splits ?? []) as unknown as SplitWithCount[]} />
@@ -85,13 +85,13 @@ export default async function HomePage() {
         <div className="flex gap-3">
           <Link
             href="/groups/new"
-            className="flex flex-1 items-center justify-center rounded-2xl bg-white py-3.5 text-sm font-semibold text-zinc-900 shadow-sm ring-1 ring-zinc-200 active:bg-zinc-50"
+            className="flex flex-1 items-center justify-center rounded-2xl bg-white py-3.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
           >
             New Group
           </Link>
           <Link
             href="/splits/new"
-            className="flex flex-1 items-center justify-center rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white shadow-lg active:bg-zinc-700"
+            className="flex flex-1 items-center justify-center rounded-2xl bg-teal-600 py-3.5 text-sm font-semibold text-white shadow-lg active:bg-teal-700"
           >
             New Split
           </Link>

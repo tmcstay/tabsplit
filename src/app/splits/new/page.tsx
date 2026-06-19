@@ -14,7 +14,7 @@ export default async function NewSplitPage({
   const { group: groupId, members: membersParam } = await searchParams
 
   let groupName: string | null = null
-  let initialAttendees: { id: string; display_name: string; phone: string | null }[] = []
+  let initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null }[] = []
 
   if (groupId) {
     const memberIds = membersParam?.split(',').filter(Boolean) ?? []
@@ -24,23 +24,28 @@ export default async function NewSplitPage({
       memberIds.length > 0
         ? supabase
             .from('group_members')
-            .select('id, display_name, phone')
+            .select('id, display_name, phone, email')
             .eq('group_id', groupId)
             .in('id', memberIds)
         : supabase
             .from('group_members')
-            .select('id, display_name, phone')
+            .select('id, display_name, phone, email')
             .eq('group_id', groupId),
     ])
 
     groupName = group?.name ?? null
-    initialAttendees = members ?? []
+    initialAttendees = (members ?? []).map(m => ({
+      id: m.id,
+      display_name: m.display_name,
+      phone: m.phone ?? null,
+      email: m.email ?? null,
+    }))
   }
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold tracking-tight text-zinc-900">New Split</h1>
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">New Split</h1>
       </header>
       <main className="flex-1 px-4 py-6 pb-24">
         <NewSplitForm

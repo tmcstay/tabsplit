@@ -111,11 +111,11 @@ export default async function SplitResultsPage({
 
   return (
     <div className="flex min-h-screen flex-col pb-24">
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 py-4">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold tracking-tight text-zinc-900">{split.title}</h1>
-            <p className="text-xs text-zinc-400">{dateStr}</p>
+            <h1 className="truncate text-xl font-bold tracking-tight text-slate-900">{split.title}</h1>
+            <p className="text-xs text-slate-400">{dateStr}</p>
           </div>
           {shareToken && <ShareButton token={shareToken} />}
         </div>
@@ -128,14 +128,14 @@ export default async function SplitResultsPage({
           <img
             src={signedReceiptUrl}
             alt="Receipt"
-            className="max-h-32 w-full rounded-xl object-cover shadow-sm ring-1 ring-zinc-200"
+            className="max-h-32 w-full rounded-xl object-cover shadow-sm ring-1 ring-slate-200"
           />
         )}
 
         {/* Grand total */}
         {split.total != null && (
-          <div className="rounded-xl bg-zinc-900 px-5 py-4 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Total</p>
+          <div className="rounded-xl bg-slate-900 px-5 py-4 text-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
         )}
@@ -151,22 +151,22 @@ export default async function SplitResultsPage({
 
 function PersonCard({ person }: { person: PersonResult }) {
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-200">
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="flex items-center justify-between px-4 py-4">
         <div>
-          <p className="font-semibold text-zinc-900">{person.label}</p>
-          <p className="text-xs text-zinc-400">
+          <p className="font-semibold text-slate-900">{person.label}</p>
+          <p className="text-xs text-slate-400">
             {person.itemLines.length} item{person.itemLines.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <p className="text-xl font-bold text-zinc-900">${person.total.toFixed(2)}</p>
+        <p className="text-xl font-bold text-slate-900">${person.total.toFixed(2)}</p>
       </div>
       {person.itemLines.length > 0 && (
-        <div className="border-t border-zinc-100">
+        <div className="border-t border-slate-100">
           {person.itemLines.map((line, i) => (
             <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="text-zinc-600">{line.description}</span>
-              <span className="font-medium text-zinc-900">${line.share.toFixed(2)}</span>
+              <span className="text-slate-600">{line.description}</span>
+              <span className="font-medium text-slate-900">${line.share.toFixed(2)}</span>
             </div>
           ))}
         </div>

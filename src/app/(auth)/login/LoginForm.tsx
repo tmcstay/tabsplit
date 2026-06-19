@@ -42,7 +42,7 @@ function PasswordInput({
   const [visible, setVisible] = useState(false)
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-zinc-700">
+      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
         {label}
       </label>
       <div className="relative mt-1.5">
@@ -54,12 +54,12 @@ function PasswordInput({
           onChange={e => onChange(e.target.value)}
           required
           autoComplete={autoComplete}
-          className="w-full rounded-lg px-3 py-2.5 pr-10 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900"
+          className="w-full rounded-lg px-3 py-2.5 pr-10 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
         />
         <button
           type="button"
           onClick={() => setVisible(v => !v)}
-          className="absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400 hover:text-zinc-600"
+          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
           aria-label={visible ? 'Hide password' : 'Show password'}
           tabIndex={-1}
         >
@@ -137,12 +137,12 @@ export function LoginForm() {
   }
 
   const inputClass =
-    'mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm ring-1 ring-zinc-300 outline-none focus:ring-2 focus:ring-zinc-900'
+    'mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
 
   return (
     <div className="space-y-5">
       {/* Tab switcher */}
-      <div className="flex rounded-lg bg-zinc-100 p-1">
+      <div className="flex rounded-lg bg-slate-100 p-1">
         {(['login', 'signup'] as Tab[]).map(t => (
           <button
             key={t}
@@ -150,8 +150,8 @@ export function LoginForm() {
             onClick={() => switchTab(t)}
             className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
               tab === t
-                ? 'bg-white text-zinc-900 shadow-sm'
-                : 'text-zinc-500 hover:text-zinc-700'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             {t === 'login' ? 'Log in' : 'Sign up'}
@@ -163,7 +163,7 @@ export function LoginForm() {
       {tab === 'login' && (
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label htmlFor="login-email" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="login-email" className="block text-sm font-medium text-slate-700">
               Email address
             </label>
             <input
@@ -189,7 +189,7 @@ export function LoginForm() {
           <div className="flex justify-end">
             <Link
               href="/forgot-password"
-              className="text-xs text-zinc-400 underline-offset-2 hover:text-zinc-600 hover:underline"
+              className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
             >
               Forgot password?
             </Link>
@@ -202,7 +202,7 @@ export function LoginForm() {
           <button
             type="submit"
             disabled={loading || !email.trim() || !password}
-            className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Logging in…' : 'Log in'}
           </button>
@@ -222,7 +222,7 @@ export function LoginForm() {
         ) : (
           <form onSubmit={handleSignUp} className="space-y-4">
             <div>
-              <label htmlFor="signup-email" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="signup-email" className="block text-sm font-medium text-slate-700">
                 Email address
               </label>
               <input
@@ -261,7 +261,7 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={loading || !email.trim() || !password || !confirmPassword}
-              className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? 'Creating account…' : 'Create account'}
             </button>
