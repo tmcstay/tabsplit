@@ -33,6 +33,8 @@ workflows:
         script: |
           keychain initialize
           keychain add-certificates --certificate $CM_CERTIFICATE --certificate-password $CM_CERTIFICATE_PASSWORD
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo $CM_PROVISIONING_PROFILE | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
           xcode-project use-profiles
       - name: Build ipa for distribution
         script: |
