@@ -129,6 +129,21 @@ export async function addLineItem(
   }
 }
 
+export async function unfinaliseSplit(splitId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  await Promise.all([
+    supabase
+      .from('splits')
+      .update({ status: 'draft' })
+      .eq('id', splitId)
+      .eq('organiser_id', user.id),
+    supabase.from('share_links').delete().eq('split_id', splitId),
+  ])
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

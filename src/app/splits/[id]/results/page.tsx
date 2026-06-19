@@ -2,13 +2,9 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { ShareButton } from './ShareButton'
-
-interface PersonResult {
-  id: string
-  label: string
-  total: number
-  itemLines: { description: string; share: number }[]
-}
+import { EditButton } from './EditButton'
+import { PersonCard } from './PersonCard'
+import type { PersonResult } from './PersonCard'
 
 function calculateResults(
   attendees: Tables<'attendees'>[],
@@ -117,7 +113,10 @@ export default async function SplitResultsPage({
             <h1 className="truncate text-xl font-bold tracking-tight text-slate-900">{split.title}</h1>
             <p className="text-xs text-slate-400">{dateStr}</p>
           </div>
-          {shareToken && <ShareButton token={shareToken} />}
+          <div className="flex shrink-0 items-center gap-2">
+            <EditButton splitId={id} />
+            {shareToken && <ShareButton token={shareToken} />}
+          </div>
         </div>
       </header>
 
@@ -145,32 +144,6 @@ export default async function SplitResultsPage({
           <PersonCard key={person.id} person={person} />
         ))}
       </main>
-    </div>
-  )
-}
-
-function PersonCard({ person }: { person: PersonResult }) {
-  return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center justify-between px-4 py-4">
-        <div>
-          <p className="font-semibold text-slate-900">{person.label}</p>
-          <p className="text-xs text-slate-400">
-            {person.itemLines.length} item{person.itemLines.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <p className="text-xl font-bold text-slate-900">${person.total.toFixed(2)}</p>
-      </div>
-      {person.itemLines.length > 0 && (
-        <div className="border-t border-slate-100">
-          {person.itemLines.map((line, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="text-slate-600">{line.description}</span>
-              <span className="font-medium text-slate-900">${line.share.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
