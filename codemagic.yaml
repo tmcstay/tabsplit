@@ -6,9 +6,8 @@ workflows:
     integrations:
       app_store_connect: codemagic_api_key
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.tabsplit.com
+      groups:
+        - ios_signing_manual
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -30,11 +29,11 @@ workflows:
       - name: Install CocoaPods
         script: |
           cd ios/App && pod install
-      - name: Fetch signing files
+      - name: Set up manual code signing
         script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
+          keychain initialize
+          keychain add-certificates --certificate $CM_CERTIFICATE --certificate-password $CM_CERTIFICATE_PASSWORD
+          xcode-project use-profiles
       - name: Build ipa for distribution
         script: |
           xcode-project build-ipa \
