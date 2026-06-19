@@ -76,6 +76,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [contactsMessage, setContactsMessage] = useState<string | null>(null)
 
   function addAttendee(e: React.FormEvent) {
     e.preventDefault()
@@ -99,6 +100,13 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   }
 
   async function handleImportContacts() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = !!(window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) {
+      setContactsMessage('Contact import is only available in the native app.')
+      setTimeout(() => setContactsMessage(null), 3000)
+      return
+    }
     const contacts = await tryImportContacts()
     if (contacts === null) return
     setAttendees(prev => {
@@ -265,6 +273,9 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
           </svg>
           Import from contacts
         </button>
+        {contactsMessage && (
+          <p className="text-center text-xs text-slate-400">{contactsMessage}</p>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button

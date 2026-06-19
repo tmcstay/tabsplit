@@ -90,6 +90,7 @@ export function GroupDetail({ group, members }: Props) {
   const [addError, setAddError] = useState<string | null>(null)
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  const [contactsMessage, setContactsMessage] = useState<string | null>(null)
 
   // Sync local state when server refreshes props
   useEffect(() => {
@@ -186,6 +187,13 @@ export function GroupDetail({ group, members }: Props) {
   }
 
   async function handleImportContacts() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = !!(window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) {
+      setContactsMessage('Contact import is only available in the native app.')
+      setTimeout(() => setContactsMessage(null), 3000)
+      return
+    }
     const contacts = await tryImportContacts()
     if (contacts === null) return
     setNewMembers(prev => {
@@ -481,6 +489,9 @@ export function GroupDetail({ group, members }: Props) {
               </svg>
               Import from contacts
             </button>
+            {contactsMessage && (
+              <p className="text-center text-xs text-slate-400">{contactsMessage}</p>
+            )}
           </div>
         </main>
       </>

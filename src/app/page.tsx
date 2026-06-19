@@ -31,6 +31,8 @@ function GroupCard({ group }: { group: GroupWithCount }) {
   )
 }
 
+const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null
+
 export default async function HomePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -57,6 +59,9 @@ export default async function HomePage() {
     <div className="flex min-h-screen flex-col pb-36">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
         <h1 className="text-xl font-bold tracking-tight text-slate-900">TabSplit</h1>
+        {commitSha && (
+          <p className="font-mono text-[10px] text-slate-300">{commitSha}</p>
+        )}
       </header>
 
       <main className="flex-1 space-y-8 py-6">

@@ -112,6 +112,7 @@ export function NewGroupForm({ userId }: Props) {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [contactsMessage, setContactsMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (groupsLoaded) return
@@ -175,6 +176,13 @@ export function NewGroupForm({ userId }: Props) {
   }
 
   async function handleImportContacts() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = !!(window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) {
+      setContactsMessage('Contact import is only available in the native app.')
+      setTimeout(() => setContactsMessage(null), 3000)
+      return
+    }
     const contacts = await tryImportContacts()
     if (contacts === null) return
     setMembers(prev => {
@@ -335,6 +343,9 @@ export function NewGroupForm({ userId }: Props) {
           </svg>
           Import from contacts
         </button>
+        {contactsMessage && (
+          <p className="text-center text-xs text-slate-400">{contactsMessage}</p>
+        )}
 
         {/* Add from existing group */}
         {groupsLoaded && savedGroups.length > 0 && (
