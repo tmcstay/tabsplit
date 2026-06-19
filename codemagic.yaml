@@ -36,9 +36,9 @@ workflows:
           xcode-project use-profiles
       - name: Build ipa for distribution
         script: |
-          cd ios/App
-          xcodebuild -project App.xcodeproj -scheme App -showBuildSettings -verbose
-          xcodebuild -project App.xcodeproj -scheme App -configuration Release -archivePath build/App.xcarchive archive -allowProvisioningUpdates
+          xcode-project build-ipa \
+            --project "ios/App/App.xcodeproj" \
+            --scheme "App"
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
