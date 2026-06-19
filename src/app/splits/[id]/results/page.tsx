@@ -10,7 +10,9 @@ function calculateResults(
   attendees: Tables<'attendees'>[],
   attendeeGroups: Tables<'attendee_groups'>[],
   items: Tables<'items'>[],
-  assignments: Tables<'item_assignments'>[]
+  assignments: Tables<'item_assignments'>[],
+  discounts: Tables<'discounts'>[],
+  discountAttendees: Tables<'discount_attendees'>[]
 ): PersonResult[] {
   // Count assignees per item for splitting
   const itemCount: Record<string, number> = {}
@@ -19,8 +21,12 @@ function calculateResults(
   }
 
   // Per-attendee accumulation
-  const acc: Record<string, { total: number; lines: { description: string; share: number }[] }> = {}
-  for (const a of attendees) acc[a.id] = { total: 0, lines: [] }
+  const acc: Record<string, {
+    total: number
+    lines: { description: string; share: number }[]
+    discountLines: { description: string; amount: number }[]
+  }> = {}
+  for (const a of attendees) acc[a.id] = { total: 0, lines: [], discountLines: [] }
 
   for (const a of assignments) {
     const item = items.find(i => i.id === a.item_id)
@@ -28,6 +34,43 @@ function calculateResults(
     const share = Math.round((item.price / (itemCount[a.item_id] ?? 1)) * 100) / 100
     acc[a.attendee_id].total = Math.round((acc[a.attendee_id].total + share) * 100) / 100
     acc[a.attendee_id].lines.push({ description: item.description, share })
+  }
+
+  // Apply discounts
+  for (const discount of discounts) {
+    const appliedIds = discountAttendees
+      .filter(da => da.discount_id === discount.id)
+      .map(da => da.attendee_id)
+      .filter(id => acc[id])
+
+    if (appliedIds.length === 0) continue
+
+    if (discount.type === 'percentage') {
+      const pct = discount.value / 100
+      for (const id of appliedIds) {
+        const discountAmount = Math.round(acc[id].total * pct * 100) / 100
+        acc[id].total = Math.round((acc[id].total - discountAmount) * 100) / 100
+        acc[id].discountLines.push({
+          description: `Discount (${discount.value}% off)`,
+          amount: discountAmount,
+        })
+      }
+    } else {
+      // Flat: distribute proportionally by each attendee's share of the group's combined total
+      const selectedTotals = appliedIds.map(id => ({ id, rawTotal: acc[id].total }))
+      const sumTotal = selectedTotals.reduce((s, t) => s + t.rawTotal, 0)
+      if (sumTotal > 0) {
+        for (const { id, rawTotal } of selectedTotals) {
+          const proportion = rawTotal / sumTotal
+          const discountAmount = Math.round(discount.value * proportion * 100) / 100
+          acc[id].total = Math.round((acc[id].total - discountAmount) * 100) / 100
+          acc[id].discountLines.push({
+            description: `Discount ($${discount.value.toFixed(2)} off)`,
+            amount: discountAmount,
+          })
+        }
+      }
+    }
   }
 
   const grouped = new Set<string>()
@@ -38,7 +81,8 @@ function calculateResults(
     for (const m of members) grouped.add(m.id)
     const total = members.reduce((s, m) => Math.round((s + (acc[m.id]?.total ?? 0)) * 100) / 100, 0)
     const lines = members.flatMap(m => acc[m.id]?.lines ?? [])
-    results.push({ id: g.id, label: g.label, total, itemLines: lines })
+    const discountLines = members.flatMap(m => acc[m.id]?.discountLines ?? [])
+    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines })
   }
 
   for (const a of attendees) {
@@ -48,6 +92,7 @@ function calculateResults(
       label: a.display_name,
       total: acc[a.id]?.total ?? 0,
       itemLines: acc[a.id]?.lines ?? [],
+      discountLines: acc[a.id]?.discountLines ?? [],
     })
   }
 
@@ -73,23 +118,34 @@ export default async function SplitResultsPage({
     { data: attendeeGroups },
     { data: items },
     { data: shareLinks },
+    { data: discounts },
   ] = await Promise.all([
     supabase.from('attendees').select('*').eq('split_id', id),
     supabase.from('attendee_groups').select('*').eq('split_id', id),
     supabase.from('items').select('*').eq('split_id', id).order('sort_order'),
     supabase.from('share_links').select('token').eq('split_id', id).limit(1),
+    supabase.from('discounts').select('*').eq('split_id', id).order('created_at'),
   ])
 
   const itemIds = (items ?? []).map(i => i.id)
-  const { data: rawAssignments } = itemIds.length > 0
-    ? await supabase.from('item_assignments').select('*').in('item_id', itemIds)
-    : { data: [] as Tables<'item_assignments'>[] }
+  const discountIds = (discounts ?? []).map(d => d.id)
+
+  const [{ data: rawAssignments }, { data: discountAttendees }] = await Promise.all([
+    itemIds.length > 0
+      ? supabase.from('item_assignments').select('*').in('item_id', itemIds)
+      : Promise.resolve({ data: [] as Tables<'item_assignments'>[] }),
+    discountIds.length > 0
+      ? supabase.from('discount_attendees').select('*').in('discount_id', discountIds)
+      : Promise.resolve({ data: [] as Tables<'discount_attendees'>[] }),
+  ])
 
   const results = calculateResults(
     attendees ?? [],
     attendeeGroups ?? [],
     items ?? [],
-    rawAssignments ?? []
+    rawAssignments ?? [],
+    discounts ?? [],
+    discountAttendees ?? []
   )
 
   let signedReceiptUrl: string | null = null

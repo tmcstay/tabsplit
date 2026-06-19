@@ -26,16 +26,25 @@ export default async function SplitDetailPage({
     { data: items },
     { data: attendees },
     { data: attendeeGroups },
+    { data: discounts },
   ] = await Promise.all([
     supabase.from('items').select('*').eq('split_id', id).order('sort_order'),
     supabase.from('attendees').select('*').eq('split_id', id),
     supabase.from('attendee_groups').select('*').eq('split_id', id),
+    supabase.from('discounts').select('*').eq('split_id', id).order('created_at'),
   ])
 
   const itemIds = (items ?? []).map(i => i.id)
-  const { data: rawAssignments } = itemIds.length > 0
-    ? await supabase.from('item_assignments').select('*').in('item_id', itemIds)
-    : { data: [] as { item_id: string; attendee_id: string }[] }
+  const discountIds = (discounts ?? []).map(d => d.id)
+
+  const [{ data: rawAssignments }, { data: discountAttendees }] = await Promise.all([
+    itemIds.length > 0
+      ? supabase.from('item_assignments').select('*').in('item_id', itemIds)
+      : Promise.resolve({ data: [] as { item_id: string; attendee_id: string }[] }),
+    discountIds.length > 0
+      ? supabase.from('discount_attendees').select('*').in('discount_id', discountIds)
+      : Promise.resolve({ data: [] }),
+  ])
 
   const assignmentMap: Record<string, string[]> = {}
   for (const a of rawAssignments ?? []) {
@@ -60,6 +69,8 @@ export default async function SplitDetailPage({
         items={items ?? []}
         initialAssignments={assignmentMap}
         signedReceiptUrl={signedReceiptUrl}
+        discounts={discounts ?? []}
+        discountAttendees={discountAttendees ?? []}
       />
     </div>
   )

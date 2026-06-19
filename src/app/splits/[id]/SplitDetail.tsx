@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
-import { saveItems, assignItem, mergeAttendees, finaliseSplit, equalSplit, addLineItem } from './actions'
+import { saveItems, assignItem, mergeAttendees, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount } from './actions'
 
 interface Props {
   split: Tables<'splits'>
@@ -12,6 +12,8 @@ interface Props {
   items: Tables<'items'>[]
   initialAssignments: Record<string, string[]>
   signedReceiptUrl: string | null
+  discounts: Tables<'discounts'>[]
+  discountAttendees: Tables<'discount_attendees'>[]
 }
 
 interface LineGroup {
@@ -89,6 +91,8 @@ export function SplitDetail({
   items,
   initialAssignments,
   signedReceiptUrl,
+  discounts,
+  discountAttendees,
 }: Props) {
   const router = useRouter()
 
@@ -112,6 +116,12 @@ export function SplitDetail({
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeAssignAll, setChargeAssignAll] = useState(true)
   const [appFeeMode, setAppFeeMode] = useState<'host' | 'individual'>('host')
+
+  // Discount modal state
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [discountType, setDiscountType] = useState<'percentage' | 'flat'>('percentage')
+  const [discountValue, setDiscountValue] = useState('')
+  const [discountAttendeeIds, setDiscountAttendeeIds] = useState<string[]>([])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -402,6 +412,60 @@ export function SplitDetail({
     }
   }
 
+  // ── Apply discount ───────────────────────────────────────────────────────────
+
+  function openDiscountModal() {
+    setDiscountType('percentage')
+    setDiscountValue('')
+    setDiscountAttendeeIds([])
+    setShowDiscount(true)
+  }
+
+  function toggleDiscountAttendee(id: string) {
+    setDiscountAttendeeIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  function toggleDiscountAll() {
+    const allIds = attendees.map(a => a.id)
+    setDiscountAttendeeIds(prev =>
+      allIds.every(id => prev.includes(id)) ? [] : allIds
+    )
+  }
+
+  async function handleApplyDiscount() {
+    const val = parseFloat(discountValue)
+    if (isNaN(val) || val <= 0 || discountAttendeeIds.length === 0) return
+    if (discountType === 'percentage' && val > 100) return
+    setBusy(true)
+    setError(null)
+    try {
+      await applyDiscount(split.id, discountType, val, discountAttendeeIds)
+      setShowDiscount(false)
+      setDiscountValue('')
+      setDiscountAttendeeIds([])
+      router.refresh()
+    } catch {
+      setError('Failed to apply discount.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRemoveDiscount(discountId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await removeDiscount(discountId)
+      router.refresh()
+    } catch {
+      setError('Failed to remove discount.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ── Finalise ─────────────────────────────────────────────────────────────────
 
   async function handleFinalise() {
@@ -578,7 +642,53 @@ export function SplitDetail({
               </svg>
               Add charge
             </button>
+            <button
+              type="button"
+              onClick={openDiscountModal}
+              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+              </svg>
+              Apply discount
+            </button>
           </div>
+
+          {/* Applied discounts summary */}
+          {discounts.length > 0 && (
+            <div className="space-y-1.5">
+              {discounts.map(d => {
+                const appliedIds = discountAttendees
+                  .filter(da => da.discount_id === d.id)
+                  .map(da => da.attendee_id)
+                const names = appliedIds
+                  .map(id => attendees.find(a => a.id === id)?.display_name ?? '?')
+                  .join(', ')
+                const label = d.type === 'percentage'
+                  ? `${d.value}% off`
+                  : `${fmt(d.value)} off`
+                return (
+                  <div key={d.id} className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
+                    <p className="text-xs text-emerald-700">
+                      <span className="font-semibold">{label}</span>
+                      {names && <span className="text-emerald-600"> · {names}</span>}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDiscount(d.id)}
+                      disabled={busy}
+                      className="ml-2 shrink-0 text-emerald-400 hover:text-emerald-600 disabled:opacity-40"
+                      aria-label="Remove discount"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
@@ -1062,6 +1172,107 @@ export function SplitDetail({
                 className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 {busy ? 'Adding…' : 'Add to bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Apply discount bottom sheet ──────────────────────────────────────── */}
+      {showDiscount && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowDiscount(false)} />
+          <div className="relative flex max-h-[85vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+            <div className="shrink-0 border-b border-slate-100 px-4 py-4">
+              <p className="text-sm font-semibold text-slate-900">Apply discount</p>
+              <p className="mt-0.5 text-xs text-slate-400">Reduce the total for selected attendees.</p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="space-y-4 px-4 py-4">
+                {/* Type toggle */}
+                <div className="flex gap-2">
+                  {([
+                    { value: 'percentage', label: 'Percentage' },
+                    { value: 'flat',       label: 'Dollar amount' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setDiscountType(opt.value); setDiscountValue('') }}
+                      className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                        discountType === opt.value
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Value input */}
+                <div className="flex items-center gap-2 rounded-lg px-3 shadow-sm ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-teal-500">
+                  {discountType === 'flat' && (
+                    <span className="text-sm font-medium text-slate-400">$</span>
+                  )}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder={discountType === 'percentage' ? '0' : '0.00'}
+                    min="0"
+                    max={discountType === 'percentage' ? '100' : undefined}
+                    value={discountValue}
+                    onChange={e => setDiscountValue(e.target.value)}
+                    className="flex-1 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none"
+                  />
+                  {discountType === 'percentage' && (
+                    <span className="text-sm font-medium text-slate-400">%</span>
+                  )}
+                </div>
+
+                {/* Attendee selector */}
+                <div>
+                  <p className="mb-2 text-xs font-medium text-slate-500">Apply to</p>
+                  <div className="overflow-hidden rounded-xl ring-1 ring-slate-200">
+                    <button
+                      type="button"
+                      onClick={toggleDiscountAll}
+                      className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50"
+                    >
+                      <Checkbox checked={attendees.length > 0 && attendees.every(a => discountAttendeeIds.includes(a.id))} />
+                      <p className="text-sm font-medium text-slate-500">Select all</p>
+                    </button>
+                    {attendees.map(a => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => toggleDiscountAttendee(a.id)}
+                        className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-slate-50"
+                      >
+                        <Checkbox checked={discountAttendeeIds.includes(a.id)} />
+                        <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-4">
+              <button
+                type="button"
+                onClick={handleApplyDiscount}
+                disabled={
+                  !discountValue ||
+                  parseFloat(discountValue) <= 0 ||
+                  (discountType === 'percentage' && parseFloat(discountValue) > 100) ||
+                  discountAttendeeIds.length === 0 ||
+                  busy
+                }
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {busy ? 'Applying…' : 'Apply discount'}
               </button>
             </div>
           </div>

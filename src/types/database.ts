@@ -245,6 +245,48 @@ export interface Database {
         }
         Relationships: []
       }
+      discounts: {
+        Row: {
+          id: string
+          split_id: string
+          type: 'flat' | 'percentage'
+          value: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          split_id: string
+          type: 'flat' | 'percentage'
+          value: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          split_id?: string
+          type?: 'flat' | 'percentage'
+          value?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      discount_attendees: {
+        Row: {
+          id: string
+          discount_id: string
+          attendee_id: string
+        }
+        Insert: {
+          id?: string
+          discount_id: string
+          attendee_id: string
+        }
+        Update: {
+          id?: string
+          discount_id?: string
+          attendee_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -144,6 +144,40 @@ export async function unfinaliseSplit(splitId: string): Promise<void> {
   ])
 }
 
+export async function applyDiscount(
+  splitId: string,
+  type: 'flat' | 'percentage',
+  value: number,
+  attendeeIds: string[]
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: discount, error } = await supabase
+    .from('discounts')
+    .insert({ split_id: splitId, type, value })
+    .select()
+    .single()
+
+  if (error || !discount) throw new Error('Failed to create discount.')
+
+  if (attendeeIds.length > 0) {
+    const { error: joinErr } = await supabase
+      .from('discount_attendees')
+      .insert(attendeeIds.map(attendee_id => ({ discount_id: discount.id, attendee_id })))
+    if (joinErr) throw new Error('Failed to assign discount to attendees.')
+  }
+}
+
+export async function removeDiscount(discountId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  await supabase.from('discounts').delete().eq('id', discountId)
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
