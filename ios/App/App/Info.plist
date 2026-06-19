@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>TabSplit uses your contacts to quickly add people to a bill split.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TabSplit uses your camera to scan receipts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TabSplit needs access to your photo library to select receipt images.</string>
 </dict>
 </plist>
