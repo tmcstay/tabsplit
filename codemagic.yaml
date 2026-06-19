@@ -28,8 +28,9 @@ workflows:
         script: npx cap sync ios
       - name: Set up manual code signing
         script: |
+          echo $CM_CERTIFICATE | base64 --decode > /tmp/certificate.p12
           keychain initialize
-          keychain add-certificates --certificate $CM_CERTIFICATE --certificate-password $CM_CERTIFICATE_PASSWORD
+          keychain add-certificates --certificate /tmp/certificate.p12 --certificate-password $CM_CERTIFICATE_PASSWORD
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo $CM_PROVISIONING_PROFILE | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
           xcode-project use-profiles
