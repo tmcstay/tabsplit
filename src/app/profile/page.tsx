@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SignOutButton } from './SignOutButton'
+import { PayIdForm } from './PayIdForm'
 
 export default async function ProfilePage() {
   const supabase = await createClient()
@@ -9,6 +10,12 @@ export default async function ProfilePage() {
   } = await supabase.auth.getUser()
 
   if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('payid, payid_label')
+    .eq('id', user.id)
+    .single()
 
   return (
     <div className="flex min-h-screen flex-col pb-20">
@@ -25,6 +32,12 @@ export default async function ProfilePage() {
           </p>
           <p className="mt-2 text-sm font-medium text-slate-900">{user.email}</p>
         </div>
+
+        {/* Payment details */}
+        <PayIdForm
+          initialPayid={profile?.payid ?? null}
+          initialPayidLabel={profile?.payid_label ?? null}
+        />
 
         {/* Sign out */}
         <SignOutButton />

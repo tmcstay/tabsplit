@@ -16,18 +16,24 @@ export interface Database {
           id: string
           phone: string | null
           display_name: string | null
+          payid: string | null
+          payid_label: string | null
           created_at: string
         }
         Insert: {
           id: string
           phone?: string | null
           display_name?: string | null
+          payid?: string | null
+          payid_label?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           phone?: string | null
           display_name?: string | null
+          payid?: string | null
+          payid_label?: string | null
           created_at?: string
         }
         Relationships: []

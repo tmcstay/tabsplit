@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
+import { PayIdBanner } from '@/components/PayIdBanner'
 
 interface PersonResult {
   id: string
@@ -138,13 +139,14 @@ export default async function SharePage({
   const itemIds = (items ?? []).map(i => i.id)
   const discountIds = (discounts ?? []).map(d => d.id)
 
-  const [{ data: rawAssignments }, { data: discountAttendees }] = await Promise.all([
+  const [{ data: rawAssignments }, { data: discountAttendees }, { data: organiserProfile }] = await Promise.all([
     itemIds.length > 0
       ? supabase.from('item_assignments').select('*').in('item_id', itemIds)
       : Promise.resolve({ data: [] as Tables<'item_assignments'>[] }),
     discountIds.length > 0
       ? supabase.from('discount_attendees').select('*').in('discount_id', discountIds)
       : Promise.resolve({ data: [] as Tables<'discount_attendees'>[] }),
+    supabase.from('users').select('display_name, payid, payid_label').eq('id', split.organiser_id).single(),
   ])
 
   const results = calculateResults(
@@ -180,6 +182,15 @@ export default async function SharePage({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
+        )}
+
+        {/* PayID banner */}
+        {organiserProfile?.payid && (
+          <PayIdBanner
+            organiseName={organiserProfile.display_name}
+            payid={organiserProfile.payid}
+            payidLabel={organiserProfile.payid_label}
+          />
         )}
 
         {/* Per-person breakdown */}

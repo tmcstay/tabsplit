@@ -5,6 +5,7 @@ import { ShareButton } from './ShareButton'
 import { EditButton } from './EditButton'
 import { PersonCard } from './PersonCard'
 import type { PersonResult } from './PersonCard'
+import { PayIdBanner } from '@/components/PayIdBanner'
 
 function calculateResults(
   attendees: Tables<'attendees'>[],
@@ -119,12 +120,14 @@ export default async function SplitResultsPage({
     { data: items },
     { data: shareLinks },
     { data: discounts },
+    { data: organiserProfile },
   ] = await Promise.all([
     supabase.from('attendees').select('*').eq('split_id', id),
     supabase.from('attendee_groups').select('*').eq('split_id', id),
     supabase.from('items').select('*').eq('split_id', id).order('sort_order'),
     supabase.from('share_links').select('token').eq('split_id', id).limit(1),
     supabase.from('discounts').select('*').eq('split_id', id).order('created_at'),
+    supabase.from('users').select('display_name, payid, payid_label').eq('id', user.id).single(),
   ])
 
   const itemIds = (items ?? []).map(i => i.id)
@@ -193,6 +196,15 @@ export default async function SplitResultsPage({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
+        )}
+
+        {/* PayID banner */}
+        {organiserProfile?.payid && (
+          <PayIdBanner
+            organiseName={organiserProfile.display_name}
+            payid={organiserProfile.payid}
+            payidLabel={organiserProfile.payid_label}
+          />
         )}
 
         {/* Per-person results */}
