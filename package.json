@@ -16,6 +16,7 @@
     "@capacitor/ios": "^7.6.6",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
+    "@tmcstay/gwfc-brand": "github:tmcstay/gwfc-brand",
     "next": "^15.3.9",
     "next-pwa": "^5.6.0",
     "react": "19.2.4",
