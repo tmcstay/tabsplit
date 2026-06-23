@@ -1,34 +1,78 @@
 # TabSplit — Session Handoff
 
 ## Session Date
-2026-06-18 / 2026-06-19
+2026-06-19 (session 3)
 
 ## Completed This Session
 
-### Security & Stability
-- **Next.js 15.3.3 → 15.3.9** — patched security vulnerability flagged by Vercel on deploy
-- **`crypto.randomUUID()` polyfill** — added `src/lib/uuid.ts` with `generateId()` fallback for older Safari; replaced all 6 occurrences across the codebase
-- **Server actions body size limit** — raised to 10MB in `next.config.ts` to support receipt image uploads
+### Capacitor Native Build Setup
 
-### Bug Fixes
-- **Hydration error on mobile** — `SplitList.tsx` `formatDate` used `Intl.DateTimeFormat` at render time causing server (UTC) / client (AEST) timezone mismatch; replaced with `ClientDate` component that defers formatting to `useEffect`
-- **Safari file input detection** — `handleFileChange` in `NewSplitForm.tsx` now treats any file with a non-empty name as valid, even if `size === 0` (Safari behaviour); added detailed console logging to diagnose
-- **OCR error visibility** — `/api/ocr` error response now includes `visionStatus` and `visionStatusText` so the upstream Google Vision HTTP code is visible to the client
+**capacitor.config.ts**
+- `appId` changed from `com.tabsplit.app` → `app.tabsplit.com`
+- Added `server: { url: 'https://tabsplit-three.vercel.app', cleartext: false }` — app loads the live Vercel site instead of bundled files
+- `webDir: 'out'` kept (required by CLI when server.url is set, but unused)
+- Static export is NOT viable — server actions and OCR API route require a real server
 
-### Mobile / PWA
-- **Eruda mobile console** — injected via `next/script` (afterInteractive); shows on any hostname that isn't `localhost` OR includes `vercel.app`; gives a floating console panel on device for reading logs
-- **Viewport fixes** — `html` changed to `h-dvh`, `body` to `h-full overflow-y-auto overscroll-none`; viewport meta updated with `maximumScale: 1`, `viewportFit: 'cover'`
-- **globals.css cleanup** — removed `font-family: Arial` override that was shadowing Tailwind's font stack
+**Bundle ID: app.tabsplit.com (reversed domain)**
+- `capacitor.config.ts` — `appId`
+- `android/app/build.gradle` — `namespace` and `applicationId`
+- `ios/App/App.xcodeproj/project.pbxproj` — both Debug and Release `PRODUCT_BUNDLE_IDENTIFIER`
 
-### UI / Features
-- **Step 3 button redesign** — separated into "Load file" (indigo, triggers file picker) and "Create Split" (emerald with checkmark, submits); they swap based on receipt state; was previously one button that toggled its label
-- **SplitDetail button colours** — header action buttons now coloured: Assign (violet), Equal (sky), Finalise (emerald when all assigned, zinc when not)
-- **Removed raw OCR panels** — removed both the collapsible "Raw OCR output" block in the no-items state and the side panel in the assignment UI; also removed `rawText`/`showRawText` state
-- **Add Charge feature** — new `addLineItem` server action + "Add charge" bottom sheet in SplitDetail:
-  - **Tip**: shows bill subtotal, quick % buttons (10/15/18/20%)
-  - **App fee**: two payment modes — "Host paid total" (assign to all equally) vs "Per person" (exclude selected host from split item; item price = per-person × non-host count; host pays their share directly to provider)
-  - **Service charge / Custom**: fixed amount with split-equally toggle
-- **Vercel deployment** — project linked and deployed; all subsequent sessions can use `vercel --prod` to deploy
+**Capacitor downgraded to 7.6.6**
+- `@capacitor/core`, `@capacitor/ios`, `@capacitor/android`, `@capacitor/cli` all pinned to `^7.6.6`
+- Root cause: `@capacitor-community/contacts@7.2.0` requires `capacitor-swift-pm` in `7.0.0..<8.0.0`; Capacitor 8 ships SPM `8.x` which caused a package resolution conflict
+- `npx cap sync` regenerated `ios/App/CapApp-SPM/Package.swift` correctly after downgrade
+
+**iOS Info.plist**
+- `NSContactsUsageDescription`, `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription` all confirmed present (were already in HEAD from a prior session — our edit was idempotent)
+
+**App.xcscheme**
+- `ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme` confirmed present in git (was already tracked)
+- BlueprintIdentifier: `504EC3031FED79650016851F`, ArchiveAction: Release
+
+### Codemagic (`codemagic.yaml`) — new file
+
+Workflow `ios-release`:
+- Machine: `mac_mini_m2`; Node: `22.11.0`; Xcode: `latest`
+- **No CocoaPods step** — Capacitor 7 uses SPM exclusively; there is no Podfile
+- Signing: manual via `ios_signing_manual` variable group (`CM_CERTIFICATE`, `CM_CERTIFICATE_PASSWORD`, `CM_PROVISIONING_PROFILE`)
+  - Script decodes base64 cert → `/tmp/certificate.p12`, provisioning profile → `~/Library/MobileDevice/Provisioning Profiles/profile.mobileprovision`, runs `xcode-project use-profiles`
+- Build: `xcode-project build-ipa --project "ios/App/App.xcodeproj" --scheme "App"`
+- Artifacts: `build/ios/ipa/*.ipa`
+- Publishing: App Store Connect auth (integration), `submit_to_testflight: true`
+- **Build has not yet been confirmed successful** — many iterations to reach current state, last push was `aaa2065` range; next step is to trigger a Codemagic build and read the logs
+
+### Discount Feature — new DB tables + full UI
+
+**Migration** (`supabase/migrations/20240101000004_add_discounts.sql`) — run in Supabase SQL editor ✓
+
+**Tables:**
+- `discounts` — id, split_id, type ('percentage'|'flat'), value numeric(10,2), created_at
+- `discount_attendees` — id, discount_id, attendee_id; cascade-deletes on discount removal
+
+**RLS:** organiser manages via split ownership; public read via `split_has_share_link(split_id)`
+
+**Server actions** (`src/app/splits/[id]/actions.ts`):
+- `applyDiscount(splitId, type, value, attendeeIds[])` — inserts discount row then discount_attendee rows
+- `removeDiscount(discountId)` — deletes discount (cascade)
+
+**SplitDetail changes:**
+- New "Apply discount" inline button (alongside Merge attendees, Add charge)
+- Discount bottom sheet: percentage/flat chip toggle, value input, attendee multi-select with Select all
+- Applied discount chips below buttons (emerald, with × remove)
+- New props: `discounts`, `discountAttendees`
+
+**Page data fetching** (`src/app/splits/[id]/page.tsx` and results/share pages):
+- Two-phase query: first fetch discounts, then fetch discount_attendees filtered by `discount_id in (...)` — cannot be done in one Promise.all because discount IDs aren't known yet
+
+**Results calculation:**
+- Percentage: `discountAmount = round(total * pct * 100) / 100`
+- Flat: distribute proportionally by each attendee's raw total share
+- Applied after item accumulation, before attendee_groups merge
+
+**PersonCard.tsx:** extended with `discountLines`; shown in `bg-emerald-50` / `text-emerald-700` when card expanded
+
+**Share page** (`src/app/share/[token]/page.tsx`): same calculation inline, discount lines rendered identically
 
 ---
 
@@ -36,51 +80,89 @@
 
 | Issue | Root Cause | Resolution |
 |-------|-----------|------------|
-| Vercel "Vulnerable Next.js" error | Next.js 15.3.3 had security CVE | Upgraded to 15.3.9 |
-| Safari button stays "Skip & Create" | File input on Safari returns File with `size=0`, was being treated as invalid | Added name-based fallback check in `handleFileChange` |
-| Hydration error on mobile | `Intl.DateTimeFormat` called at SSR render time; server UTC ≠ client AEST | `ClientDate` component defers to `useEffect` |
-| Local Windows build flaky | next-pwa + Next.js 15 + Windows has ENOENT errors on bracket-named dirs ([id], [token]) during "Collecting page data" phase — rotates randomly between pages | Vercel (Linux) builds reliably; push and let Vercel build; don't rely on local `npm run build` for final validation |
-| `crypto.randomUUID` on older Safari | Safari < 15.4 doesn't support `crypto.randomUUID()` | `generateId()` polyfill in `src/lib/uuid.ts` |
-| OCR errors hard to diagnose | Error response only included generic message | Added `visionStatus` + `visionStatusText` to error JSON |
+| `npx cap sync` failed: `android/app/src/main/assets/` missing | Directory not created during initial Capacitor Android setup | `New-Item -ItemType Directory -Force` then re-ran cap sync |
+| SPM version conflict: `capacitor-swift-pm 8.4.0` vs `<8.0.0` | `@capacitor-community/contacts@7.2.0` needs SPM `7.x`; Capacitor 8.x ships `8.x` | Downgraded all Capacitor packages to `7.6.6` |
+| Codemagic CocoaPods step failing — no Podfile | Capacitor 6+/7+ uses SPM exclusively; `cap sync` never generates a Podfile | Removed CocoaPods step from codemagic.yaml entirely |
+| `--workspace` build arg invalid — `App.xcworkspace` doesn't exist | `.xcworkspace` is generated by CocoaPods; without CocoaPods it doesn't exist | Switched to `--project "ios/App/App.xcodeproj"` |
+| `git add -f` didn't add new untracked files in gitignored `/ios` dir | `-f` only overrides gitignore for already-tracked files | Used `git update-index --add` for new untracked files (App.xcscheme) |
+| PowerShell `cat <<'EOF'` heredoc syntax error on `git commit` | `<<'EOF'` is bash syntax; PowerShell uses `@'...'@` | Switched to Git Bash tool for all commits using bash heredoc |
+| `discount_attendees` fetched without knowing discount IDs yet | First attempt put it in the same `Promise.all` as discounts with a placeholder | Rewrote all three pages to two-phase fetch: discounts first, then discount_attendees |
 
 ---
 
 ## Next Steps (Pick Up From Here)
 
-1. **Confirm Safari receipt detection working** — open the deployed app on an iPhone, go to New Split → Step 3, select a photo, check Eruda console for:
+1. **Trigger Codemagic build and check logs** — go to Codemagic dashboard, start a build on the `ios-release` workflow, watch for errors. Most likely failure points:
+   - Signing variables not set in `ios_signing_manual` group (CM_CERTIFICATE etc.) — check they're configured in Codemagic project settings
+   - `xcode-project use-profiles` fails if profile UUID doesn't match bundle ID `app.tabsplit.com`
+   - Node version or dependency install issues
+
+2. **Confirm Safari receipt detection** — open the deployed Vercel app on an iPhone, go to New Split → Step 3, select a photo. Check Eruda console for:
    - `handleFileChange: { name, size, type, lastModified }` — should show the file
    - `setReceipt called with: [filename] [size]` — should show the file
-   - If both log correctly and "Create Split" still doesn't appear, there's a React state batching issue to investigate
-   
-2. **Remove debug console.logs from NewSplitForm** — once Safari receipt detection is confirmed working, clean up:
-   - Line 37: `console.log('NewSplitForm render ...')`
-   - Line 68: `console.log('handleFileChange:', ...)`
-   - Line 72: `console.log('setReceipt called with:', ...)`
-   - Line 77: `console.log('handleSubmit fired')`
-   - Line 284: `console.log('button clicked')` on the Create Split button
 
-3. **Generate PWA PNG icons** — `public/icons/icon-192.png` and `public/icons/icon-512.png` still need to be generated from `public/icons/icon.svg`. The PWA manifest references them but they may not exist yet. Generate using any SVG→PNG tool or Inkscape/ImageMagick.
+3. **Remove debug console.logs from NewSplitForm** — once Safari receipt detection confirmed:
+   - `NewSplitForm.tsx` line ~37: `console.log('NewSplitForm render ...')`
+   - `NewSplitForm.tsx` line ~68: `console.log('handleFileChange:', ...)`
+   - `NewSplitForm.tsx` line ~72: `console.log('setReceipt called with:', ...)`
+   - `NewSplitForm.tsx` line ~79: `console.log('handleSubmit fired')`
+   - Also check `splits/new/actions.ts` for console.logs in `createSplit`
 
-4. **Full end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, add a tip and app fee, finalise, verify share link works. Pay attention to:
-   - OCR accuracy on a real receipt photo
-   - Whether the "Add charge" per-person app fee mode calculates correctly
-   - Whether Finalise button correctly gates on all items being assigned
+4. **Generate PWA PNG icons** — `public/icons/icon-192.png` and `public/icons/icon-512.png` still need generating from `public/icons/icon.svg`
 
-5. **Set Vercel environment variables** (if not done) — check Vercel dashboard → Settings → Environment Variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `GOOGLE_VISION_API_KEY`
+5. **Full end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, apply a discount, add tip, finalise, verify share link shows discount lines, tap Edit to reopen
 
 ---
 
 ## Open Questions / Decisions to Revisit
 
-- **Eruda in production** — currently Eruda loads on ALL `*.vercel.app` URLs including the production alias `tabsplit-three.vercel.app`. Once debugging is complete, should restrict to non-production preview URLs only (or remove entirely). The condition in `layout.tsx` is the `window.location.hostname` check in the inline script.
+- **Codemagic build** — hasn't succeeded yet; need to see logs to know if signing, build, or publish step fails
 
-- **OCR multi-line parsing** — original CLAUDE.md noted "fix OCR multi-line parsing (price on next line after description)" as a next step. Strategy 1 in `route.ts` handles this case, but real-world accuracy hasn't been confirmed on actual receipts yet.
+- **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure; should be `app/tabsplit/com/` to match new bundle ID. Not addressed — Android Studio concern, low priority until Android build is needed
 
-- **App fee "host not in attendees" case** — when the organiser isn't listed as an attendee (possible if they didn't add themselves), the "Per person" mode host selector shows "Host not listed as attendee" and skips the host exclusion. This is correct behaviour but worth confirming with a real test.
+- **Eruda in production** — Eruda loads on ALL `*.vercel.app` URLs including the production alias. Once debugging is complete, restrict to non-production preview URLs or remove entirely.
 
-- **PWA install prompt** — PWA manifest and service worker are set up but the install prompt UX hasn't been tested. On iOS it requires "Add to Home Screen" manually; on Android it may show a banner.
+- **Contacts on PWA** — "Import from contacts" button is visible on the web PWA but shows a "native only" message. Decide whether to hide it entirely on web or keep it visible to signal the feature exists for native.
 
-- **Capacitor native build** — the Codemagic CI/CD pipeline hasn't been touched this session. Capacitor plugins are installed but the native iOS/Android build hasn't been tested with the current codebase.
+- **OCR multi-line parsing accuracy** — real-world receipt accuracy hasn't been confirmed. Strategy 1 in `route.ts` handles price-on-next-line but needs testing on actual receipts.
+
+- **PWA install prompt** — PWA manifest and service worker set up but install UX not tested. iOS requires manual "Add to Home Screen"; Android may show a banner.
+
+---
+
+## Previous Sessions Summary
+
+### Session 2 (2026-06-19)
+
+#### Colour Scheme — Full Ocean Palette (zinc → slate/teal)
+Applied across all 21 UI files.
+
+#### App Fee Host Derivation
+Removed host selector dropdown; host auto-derived from `split.organiser_id`.
+
+#### Contacts Import with Email
+Added to all three attendee-adding flows; fixed missing `requestPermissions()` call.
+
+#### Results Page — Collapsible Cards + Edit Button
+`PersonCard.tsx`, `EditButton.tsx`, `unfinaliseSplit` action.
+
+#### Home Page — Commit SHA
+`process.env.VERCEL_GIT_COMMIT_SHA` shown as 7-char monospace text.
+
+### Session 1 (2026-06-18 / 2026-06-19)
+
+#### Security & Stability
+- Next.js 15.3.3 → 15.3.9 (security CVE patch)
+- `crypto.randomUUID()` polyfill via `generateId()` in `src/lib/uuid.ts`
+- Server actions body size limit raised to 10MB
+
+#### Bug Fixes
+- Hydration error on mobile — `ClientDate` component
+- Safari file input detection — name-based fallback when `size === 0`
+- OCR error visibility — added `visionStatus` / `visionStatusText` to error response
+
+#### UI / Features
+- Step 3 button redesign — "Load file" (indigo) and "Create Split" (emerald)
+- Add Charge feature — tip, app fee, service charge, custom
+- Removed raw OCR debug panels
+- Eruda mobile console, viewport fixes
