@@ -16,7 +16,7 @@
     "@capacitor/ios": "^7.6.6",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
-    "@tmcstay/gwfc-brand": "git+https://${NPM_GITHUB_TOKEN}@github.com/tmcstay/gwfc-brand.git",
+    "@tmcstay/gwfc-brand": "^1.0.0",
     "next": "^15.3.9",
     "next-pwa": "^5.6.0",
     "react": "19.2.4",
