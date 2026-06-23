@@ -27,6 +27,12 @@ workflows:
         script: npm ci
       - name: Capacitor sync
         script: npx cap sync ios
+      - name: Increment build number
+        script: |
+          cd ios/App
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-build-number "$BUNDLE_ID" || echo "0")
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          agvtool new-version -all $NEW_BUILD_NUMBER
       - name: Set up manual code signing
         script: |
           echo $CM_CERTIFICATE | base64 --decode > /tmp/certificate.p12
