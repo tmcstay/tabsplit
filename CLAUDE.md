@@ -26,6 +26,7 @@ Receipt splitting mobile app for dining groups. One organiser scans/uploads a re
 
 ## Project Structure
 - `/src/app` — App Router pages and layouts
+- `/src/app/_components/` — Shared client components used by layout (e.g. `BottomNav.tsx`)
 - `/src/components` — Reusable UI components
 - `/src/lib` — Supabase client, utilities
 - `/src/lib/uuid.ts` — `generateId()` polyfill for `crypto.randomUUID()` (Safari fallback)
@@ -58,14 +59,16 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - `indigo` — Load file button
 
 ## Auth Flow
-- Email + password (signInWithPassword / signUp)
-- Forgot password via resetPasswordForEmail
-- Server-side auth check on login page redirects authenticated users to /
-- Files: src/app/(auth)/login/page.tsx, LoginForm.tsx, forgot-password/page.tsx
+- Email + password (`signInWithPassword` / `signUp`)
+- `LoginForm.tsx` has a tab switcher: **Log in** (email + password → `signInWithPassword`) and **Sign up** (email + password + confirm → `signUp` → email confirmation required before first login)
+- Password field has show/hide toggle; friendly error messages mapped from Supabase error strings
+- Forgot password: `resetPasswordForEmail` → sends reset link to `/reset-password` — **NOTE: `/reset-password` page does not yet exist**; the reset link will 404 after clicking
+- Server-side auth check on login page: `getUser()` → redirect to `/` if already authenticated
+- Files: `src/app/(auth)/login/page.tsx` (server component, auth guard), `LoginForm.tsx` (client component, tabs + forms), `forgot-password/page.tsx` (client component)
 
 ## Database Schema
 ### Tables
-- `users` — auth users with display_name and phone
+- `users` — auth users with display_name, phone, payid, payid_label
 - `groups` — saved collections of people the organiser splits with regularly; `saved` boolean (default false) indicates whether the organiser has chosen to keep the group for future use
 - `group_members` — individual people within a group; each has a display_name, optional phone, optional email, and optional link to a user account
 - `splits` — a dining event with receipt, organiser, status, and optional `group_id` linking back to the group it was created from
@@ -78,8 +81,12 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - `discount_attendees` — which attendees a discount applies to; columns: id, discount_id, attendee_id; cascade-deletes when discount is removed
 
 ### Migrations
+- `20240101000000` — initial schema: all core tables (users, splits, attendee_groups, attendees, items, item_assignments, share_links), RLS policies, receipts storage bucket
+- `20240101000001` — handle_new_user trigger: mirrors new auth.users rows into public.users (security definer, on conflict do nothing)
+- `20240101000002` — adds groups and group_members tables; adds group_id FK to splits; expands status check to include 'pending'
 - `20240101000003` — adds email (nullable) to group_members and attendees tables
 - `20240101000004` — adds discounts and discount_attendees tables with RLS
+- `20260623120000` — adds payid and payid_label (nullable) to users; adds public read policy for organiser profile when a share link exists for their split
 
 ### Split Status Flow
 Splits move through three states in order:
@@ -153,6 +160,12 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 - `src/app/splits/actions.ts` — `deleteSplit`
 
 ## Key Components
+
+### BottomNav (`src/app/_components/BottomNav.tsx`)
+- Client component rendered by root `layout.tsx`
+- Two tabs: Home (`/`) and Profile (`/profile`); active tab highlighted via `usePathname`
+- Returns `null` on `/login` and `/callback` so auth pages have no nav chrome
+- SVG icons: active uses teal-600 stroke, inactive uses slate-400 stroke
 
 ### SplitDetail (`src/app/splits/[id]/SplitDetail.tsx`)
 - Handles both states: no-items-yet (scan receipt) and item assignment UI
@@ -240,23 +253,38 @@ Pattern used in all three:
   - ArchiveAction buildConfiguration: Release
 
 ## Codemagic (`codemagic.yaml`)
-- Workflow: `ios-release` — builds and uploads to TestFlight
+- Workflow: `ios-workflow` — builds and uploads to TestFlight
 - Machine: `mac_mini_m2`
 - Node: `22.11.0`, Xcode: `latest`
 - **No CocoaPods step** — Capacitor 7 uses SPM exclusively
 - Signing: manual via `ios_signing_manual` variable group
   - Variables: `CM_CERTIFICATE` (base64 P12), `CM_CERTIFICATE_PASSWORD`, `CM_PROVISIONING_PROFILE` (base64 mobileprovision)
   - Signing script decodes to `/tmp/certificate.p12` and `~/Library/MobileDevice/Provisioning Profiles/profile.mobileprovision`, initialises a build keychain, then runs `xcode-project use-profiles`
+- Build number: auto-incremented via `agvtool new-version -all $PROJECT_BUILD_NUMBER` — Codemagic's `$PROJECT_BUILD_NUMBER` increments on every build, preventing App Store Connect duplicate build number rejections
 - Build: `xcode-project build-ipa --project "ios/App/App.xcodeproj" --scheme "App"`
 - Artifacts: `build/ios/ipa/*.ipa`
 - Publishing: App Store Connect integration (`app_store_connect` auth block), `submit_to_testflight: true`
 - Env vars used: `XCODE_PROJECT: "ios/App/App.xcodeproj"`, `XCODE_SCHEME: "App"`, `BUNDLE_ID: "app.tabsplit.com"`
+
+### Codemagic Script Order
+1. Install npm dependencies (`npm ci`)
+2. Capacitor sync (`npx cap sync ios`)
+3. Increment build number (`agvtool new-version -all $PROJECT_BUILD_NUMBER`)
+4. Set up manual code signing
+5. Build ipa for distribution
 
 ## Environment Variables
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `GOOGLE_VISION_API_KEY` (server-side only)
 - `VERCEL_GIT_COMMIT_SHA` — auto-injected by Vercel at build time; used on home page
+- `NPM_GITHUB_TOKEN` — GitHub Personal Access Token with `read:packages` scope; required by `.npmrc` to pull `@tmcstay/gwfc-brand` from GitHub Packages; must be set in Vercel env vars and Codemagic `npm_auth` variable group
+
+## GitHub Packages / .npmrc
+- `.npmrc` configures `@tmcstay` scope to use GitHub Packages registry
+- Auth token read from `NPM_GITHUB_TOKEN` env var via `${NPM_GITHUB_TOKEN}` — npm expands `${}` in `.npmrc` files natively
+- This works in Vercel (set as env var) and Codemagic (set in `npm_auth` variable group)
+- Do NOT hardcode the token in `.npmrc` — it is committed to git
 
 ## OCR Route (`src/app/api/ocr/route.ts`)
 - POST — accepts `{ image: base64string }`
@@ -277,5 +305,7 @@ Pattern used in all three:
 - Public share page complete (with discount lines)
 - Capacitor configured: server.url → Vercel, bundle ID app.tabsplit.com, Info.plist usage keys set, SPM scheme file present, all packages at 7.6.6
 - Codemagic yaml written — build not yet confirmed successful
+- `.npmrc` configured with GitHub Packages registry + `NPM_GITHUB_TOKEN` auth
+- iOS build number auto-increment via `$PROJECT_BUILD_NUMBER` in codemagic.yaml
 - Deployed to Vercel at https://tabsplit-three.vercel.app
 - Next: trigger Codemagic build and verify, remove debug logs from NewSplitForm once Safari confirmed, generate PWA PNG icons, full end-to-end mobile test

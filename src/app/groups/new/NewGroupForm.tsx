@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateId } from '@/lib/uuid'
+import { ContactPicker, type Contact } from '@/components/ContactPicker'
 
 const DIAL_CODES = [
   { code: '+61', label: 'AU +61' },
@@ -113,6 +114,8 @@ export function NewGroupForm({ userId }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [contactsMessage, setContactsMessage] = useState<string | null>(null)
+  const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
+  const [showPicker, setShowPicker] = useState(false)
 
   useEffect(() => {
     if (groupsLoaded) return
@@ -185,10 +188,22 @@ export function NewGroupForm({ userId }: Props) {
     }
     const contacts = await tryImportContacts()
     if (contacts === null) return
+    setPickerContacts(contacts)
+    setShowPicker(true)
+  }
+
+  function handlePickerAdd(selected: Contact[]) {
     setMembers(prev => {
       const existing = new Set(prev.map(m => m.display_name))
-      return [...prev, ...contacts.filter(c => !existing.has(c.display_name))]
+      return [
+        ...prev,
+        ...selected
+          .filter(c => !existing.has(c.display_name))
+          .map(c => ({ id: c.id, display_name: c.display_name, phone: c.phone, email: c.email })),
+      ]
     })
+    setShowPicker(false)
+    setPickerContacts([])
   }
 
   function handleSaveToggle() {
@@ -277,6 +292,14 @@ export function NewGroupForm({ userId }: Props) {
   if (step === 2) {
     return (
       <div className="space-y-6">
+        {showPicker && (
+          <ContactPicker
+            contacts={pickerContacts}
+            existingNames={new Set(members.map(m => m.display_name))}
+            onAdd={handlePickerAdd}
+            onClose={() => { setShowPicker(false); setPickerContacts([]) }}
+          />
+        )}
         <StepIndicator step={2} />
         <div>
           <h2 className="text-lg font-semibold text-gwfc-blue">Add members</h2>

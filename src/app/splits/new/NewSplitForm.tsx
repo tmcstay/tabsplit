@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSplit } from './actions'
 import { generateId } from '@/lib/uuid'
+import { ContactPicker, type Contact } from '@/components/ContactPicker'
 
 interface Attendee {
   id: string
@@ -77,6 +78,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [contactsMessage, setContactsMessage] = useState<string | null>(null)
+  const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
+  const [showPicker, setShowPicker] = useState(false)
 
   function addAttendee(e: React.FormEvent) {
     e.preventDefault()
@@ -109,10 +112,17 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     }
     const contacts = await tryImportContacts()
     if (contacts === null) return
+    setPickerContacts(contacts)
+    setShowPicker(true)
+  }
+
+  function handlePickerAdd(selected: Contact[]) {
     setAttendees(prev => {
       const existing = new Set(prev.map(a => a.display_name))
-      return [...prev, ...contacts.filter(c => !existing.has(c.display_name))]
+      return [...prev, ...selected.filter(c => !existing.has(c.display_name))]
     })
+    setShowPicker(false)
+    setPickerContacts([])
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -192,6 +202,14 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   if (step === 2) {
     return (
       <div className="space-y-6">
+        {showPicker && (
+          <ContactPicker
+            contacts={pickerContacts}
+            existingNames={new Set(attendees.map(a => a.display_name))}
+            onAdd={handlePickerAdd}
+            onClose={() => { setShowPicker(false); setPickerContacts([]) }}
+          />
+        )}
         <StepIndicator step={2} />
         <div>
           <h2 className="text-lg font-semibold text-gwfc-blue">Who&apos;s splitting?</h2>

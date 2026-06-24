@@ -1,78 +1,36 @@
 # TabSplit — Session Handoff
 
 ## Session Date
-2026-06-19 (session 3)
+2026-06-24 (session 4)
 
 ## Completed This Session
 
-### Capacitor Native Build Setup
+### GitHub Packages Auth in .npmrc
+- Added `//npm.pkg.github.com/:_authToken=${NPM_GITHUB_TOKEN}` to `.npmrc`
+- npm natively expands `${}` in `.npmrc` files — this is correct and intentional (unlike `package.json` dependency strings which do NOT expand env vars)
+- `NPM_GITHUB_TOKEN` must be set in Vercel env vars and Codemagic `npm_auth` variable group for builds to authenticate against GitHub Packages
 
-**capacitor.config.ts**
-- `appId` changed from `com.tabsplit.app` → `app.tabsplit.com`
-- Added `server: { url: 'https://tabsplit-three.vercel.app', cleartext: false }` — app loads the live Vercel site instead of bundled files
-- `webDir: 'out'` kept (required by CLI when server.url is set, but unused)
-- Static export is NOT viable — server actions and OCR API route require a real server
+### iOS Build Number Auto-Increment
+- Added "Increment build number" step to `codemagic.yaml` between Capacitor sync and code signing
+- Uses `agvtool new-version -all $PROJECT_BUILD_NUMBER` — Codemagic's built-in `$PROJECT_BUILD_NUMBER` auto-increments every build
+- First attempt used `app-store-connect get-latest-build-number` which failed silently (build showed Version code: 1); replaced with `$PROJECT_BUILD_NUMBER`
+- `CURRENT_PROJECT_VERSION` is hardcoded to `1` in `project.pbxproj` (lines 299 and 321, Debug + Release) — `agvtool` overrides this at build time
 
-**Bundle ID: app.tabsplit.com (reversed domain)**
-- `capacitor.config.ts` — `appId`
-- `android/app/build.gradle` — `namespace` and `applicationId`
-- `ios/App/App.xcodeproj/project.pbxproj` — both Debug and Release `PRODUCT_BUNDLE_IDENTIFIER`
+### Git Push Credential Fix
+- Git had no credential helper configured; `git push` was failing with "could not read Username"
+- Fix: `git -c credential.helper=manager push origin main` — uses Windows Credential Manager (GCM) which has stored GitHub credentials
+- Previous sessions were using this same pattern; no permanent fix was applied
 
-**Capacitor downgraded to 7.6.6**
-- `@capacitor/core`, `@capacitor/ios`, `@capacitor/android`, `@capacitor/cli` all pinned to `^7.6.6`
-- Root cause: `@capacitor-community/contacts@7.2.0` requires `capacitor-swift-pm` in `7.0.0..<8.0.0`; Capacitor 8 ships SPM `8.x` which caused a package resolution conflict
-- `npx cap sync` regenerated `ios/App/CapApp-SPM/Package.swift` correctly after downgrade
+### CLAUDE.md History Audit
+Reviewed the original Claude.ai chat transcript to find gaps between what was built and what was documented. Fixes applied:
 
-**iOS Info.plist**
-- `NSContactsUsageDescription`, `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription` all confirmed present (were already in HEAD from a prior session — our edit was idempotent)
+- **Migrations section** — added 4 missing entries: `000000` (initial schema), `000001` (user trigger), `000002` (groups + pending status), `20260623120000` (PayID/payid_label + organiser public read policy)
+- **`users` table** — added `payid` and `payid_label` to column list
+- **Auth Flow** — expanded to describe Login/Sign-up tab structure, `signInWithPassword`/`signUp`, password show/hide toggle, friendly error mapping, forgot password flow; flagged that `/reset-password` page does not yet exist (forgot-password links to it → 404)
+- **Project Structure** — added `src/app/_components/` entry
+- **Key Components** — added `BottomNav.tsx` section
 
-**App.xcscheme**
-- `ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme` confirmed present in git (was already tracked)
-- BlueprintIdentifier: `504EC3031FED79650016851F`, ArchiveAction: Release
-
-### Codemagic (`codemagic.yaml`) — new file
-
-Workflow `ios-release`:
-- Machine: `mac_mini_m2`; Node: `22.11.0`; Xcode: `latest`
-- **No CocoaPods step** — Capacitor 7 uses SPM exclusively; there is no Podfile
-- Signing: manual via `ios_signing_manual` variable group (`CM_CERTIFICATE`, `CM_CERTIFICATE_PASSWORD`, `CM_PROVISIONING_PROFILE`)
-  - Script decodes base64 cert → `/tmp/certificate.p12`, provisioning profile → `~/Library/MobileDevice/Provisioning Profiles/profile.mobileprovision`, runs `xcode-project use-profiles`
-- Build: `xcode-project build-ipa --project "ios/App/App.xcodeproj" --scheme "App"`
-- Artifacts: `build/ios/ipa/*.ipa`
-- Publishing: App Store Connect auth (integration), `submit_to_testflight: true`
-- **Build has not yet been confirmed successful** — many iterations to reach current state, last push was `aaa2065` range; next step is to trigger a Codemagic build and read the logs
-
-### Discount Feature — new DB tables + full UI
-
-**Migration** (`supabase/migrations/20240101000004_add_discounts.sql`) — run in Supabase SQL editor ✓
-
-**Tables:**
-- `discounts` — id, split_id, type ('percentage'|'flat'), value numeric(10,2), created_at
-- `discount_attendees` — id, discount_id, attendee_id; cascade-deletes on discount removal
-
-**RLS:** organiser manages via split ownership; public read via `split_has_share_link(split_id)`
-
-**Server actions** (`src/app/splits/[id]/actions.ts`):
-- `applyDiscount(splitId, type, value, attendeeIds[])` — inserts discount row then discount_attendee rows
-- `removeDiscount(discountId)` — deletes discount (cascade)
-
-**SplitDetail changes:**
-- New "Apply discount" inline button (alongside Merge attendees, Add charge)
-- Discount bottom sheet: percentage/flat chip toggle, value input, attendee multi-select with Select all
-- Applied discount chips below buttons (emerald, with × remove)
-- New props: `discounts`, `discountAttendees`
-
-**Page data fetching** (`src/app/splits/[id]/page.tsx` and results/share pages):
-- Two-phase query: first fetch discounts, then fetch discount_attendees filtered by `discount_id in (...)` — cannot be done in one Promise.all because discount IDs aren't known yet
-
-**Results calculation:**
-- Percentage: `discountAmount = round(total * pct * 100) / 100`
-- Flat: distribute proportionally by each attendee's raw total share
-- Applied after item accumulation, before attendee_groups merge
-
-**PersonCard.tsx:** extended with `discountLines`; shown in `bg-emerald-50` / `text-emerald-700` when card expanded
-
-**Share page** (`src/app/share/[token]/page.tsx`): same calculation inline, discount lines rendered identically
+**Key gap found: `/reset-password` page is missing** — `forgot-password/page.tsx` sends a reset email with `redirectTo: .../reset-password` but that route has never been built. Anyone who clicks "Forgot password?" will hit a 404 after the reset email.
 
 ---
 
@@ -80,6 +38,8 @@ Workflow `ios-release`:
 
 | Issue | Root Cause | Resolution |
 |-------|-----------|------------|
+| Build still showed Version code: 1 after increment step | `app-store-connect get-latest-build-number` failed silently or returned wrong value | Replaced with `$PROJECT_BUILD_NUMBER` — Codemagic built-in, always increments |
+| `git push` failing with "could not read Username" | No credential helper configured in git global/system config | Use `git -c credential.helper=manager push origin main` to invoke Windows GCM |
 | `npx cap sync` failed: `android/app/src/main/assets/` missing | Directory not created during initial Capacitor Android setup | `New-Item -ItemType Directory -Force` then re-ran cap sync |
 | SPM version conflict: `capacitor-swift-pm 8.4.0` vs `<8.0.0` | `@capacitor-community/contacts@7.2.0` needs SPM `7.x`; Capacitor 8.x ships `8.x` | Downgraded all Capacitor packages to `7.6.6` |
 | Codemagic CocoaPods step failing — no Podfile | Capacitor 6+/7+ uses SPM exclusively; `cap sync` never generates a Podfile | Removed CocoaPods step from codemagic.yaml entirely |
@@ -92,31 +52,39 @@ Workflow `ios-release`:
 
 ## Next Steps (Pick Up From Here)
 
-1. **Trigger Codemagic build and check logs** — go to Codemagic dashboard, start a build on the `ios-release` workflow, watch for errors. Most likely failure points:
-   - Signing variables not set in `ios_signing_manual` group (CM_CERTIFICATE etc.) — check they're configured in Codemagic project settings
-   - `xcode-project use-profiles` fails if profile UUID doesn't match bundle ID `app.tabsplit.com`
-   - Node version or dependency install issues
+1. **Set `NPM_GITHUB_TOKEN` in Vercel and Codemagic** — required for `npm ci` to pull `@tmcstay/gwfc-brand` from GitHub Packages:
+   - Vercel: Settings → Environment Variables → add `NPM_GITHUB_TOKEN` (all environments)
+   - Codemagic: Project settings → Environment variables → `npm_auth` group → add `NPM_GITHUB_TOKEN`
+   - Token needs `read:packages` scope on GitHub
 
-2. **Confirm Safari receipt detection** — open the deployed Vercel app on an iPhone, go to New Split → Step 3, select a photo. Check Eruda console for:
+2. **Trigger Codemagic build and check logs** — go to Codemagic dashboard, start a build on the `ios-workflow` workflow. Most likely remaining failure points:
+   - `NPM_GITHUB_TOKEN` not yet set in `npm_auth` group → `npm ci` fails on `@tmcstay/gwfc-brand`
+   - Signing variables not set in `ios_signing_manual` group (`CM_CERTIFICATE`, `CM_CERTIFICATE_PASSWORD`, `CM_PROVISIONING_PROFILE`)
+   - `xcode-project use-profiles` fails if provisioning profile UUID doesn't match bundle ID `app.tabsplit.com`
+   - Verify build number step shows a value > 1 in the logs
+
+3. **Confirm Safari receipt detection** — open the deployed Vercel app on an iPhone, go to New Split → Step 3, select a photo. Check Eruda console for:
    - `handleFileChange: { name, size, type, lastModified }` — should show the file
    - `setReceipt called with: [filename] [size]` — should show the file
 
-3. **Remove debug console.logs from NewSplitForm** — once Safari receipt detection confirmed:
+4. **Remove debug console.logs from NewSplitForm** — once Safari receipt detection confirmed:
    - `NewSplitForm.tsx` line ~37: `console.log('NewSplitForm render ...')`
    - `NewSplitForm.tsx` line ~68: `console.log('handleFileChange:', ...)`
    - `NewSplitForm.tsx` line ~72: `console.log('setReceipt called with:', ...)`
    - `NewSplitForm.tsx` line ~79: `console.log('handleSubmit fired')`
    - Also check `splits/new/actions.ts` for console.logs in `createSplit`
 
-4. **Generate PWA PNG icons** — `public/icons/icon-192.png` and `public/icons/icon-512.png` still need generating from `public/icons/icon.svg`
+5. **Generate PWA PNG icons** — `public/icons/icon-192.png` and `public/icons/icon-512.png` still need generating from `public/icons/icon.svg`
 
-5. **Full end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, apply a discount, add tip, finalise, verify share link shows discount lines, tap Edit to reopen
+6. **Full end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, apply a discount, add tip, finalise, verify share link shows discount lines, tap Edit to reopen
 
 ---
 
 ## Open Questions / Decisions to Revisit
 
-- **Codemagic build** — hasn't succeeded yet; need to see logs to know if signing, build, or publish step fails
+- **`/reset-password` page missing** — `forgot-password/page.tsx` calls `resetPasswordForEmail` with `redirectTo: .../reset-password`; that page doesn't exist. Build it before shipping. Needs to handle the Supabase `type=recovery` session and call `updateUser({ password })`.
+
+- **Codemagic build** — hasn't succeeded yet; `NPM_GITHUB_TOKEN` and signing variables still need confirming in Codemagic project settings
 
 - **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure; should be `app/tabsplit/com/` to match new bundle ID. Not addressed — Android Studio concern, low priority until Android build is needed
 
@@ -131,6 +99,22 @@ Workflow `ios-release`:
 ---
 
 ## Previous Sessions Summary
+
+### Session 3 (2026-06-19)
+
+#### Capacitor Native Build Setup
+- `appId` → `app.tabsplit.com`, `server.url` → Vercel, Capacitor downgraded to 7.6.6 (SPM conflict), Info.plist usage keys confirmed, App.xcscheme confirmed tracked
+
+#### Codemagic (`codemagic.yaml`) — new file
+- `ios-workflow`: mac_mini_m2, SPM (no CocoaPods), manual signing, `xcode-project build-ipa`, TestFlight publish
+
+#### Discount Feature
+- DB tables: `discounts`, `discount_attendees` (migration 20240101000004)
+- Server actions: `applyDiscount`, `removeDiscount`
+- SplitDetail bottom sheet, emerald chips, results/share page calculation
+
+#### gwfc-brand Dependency
+- Switched from git+https URL to GitHub Packages registry (`^1.0.0`), `.npmrc` configured with `@tmcstay` scope
 
 ### Session 2 (2026-06-19)
 

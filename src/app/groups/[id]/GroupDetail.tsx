@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Tables } from '@/types/database'
 import { generateId } from '@/lib/uuid'
+import { ContactPicker, type Contact } from '@/components/ContactPicker'
 
 const DIAL_CODES = [
   { code: '+61', label: 'AU +61' },
@@ -91,6 +92,8 @@ export function GroupDetail({ group, members }: Props) {
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [contactsMessage, setContactsMessage] = useState<string | null>(null)
+  const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
+  const [showPicker, setShowPicker] = useState(false)
 
   // Sync local state when server refreshes props
   useEffect(() => {
@@ -196,13 +199,20 @@ export function GroupDetail({ group, members }: Props) {
     }
     const contacts = await tryImportContacts()
     if (contacts === null) return
+    setPickerContacts(contacts)
+    setShowPicker(true)
+  }
+
+  function handlePickerAdd(selected: Contact[]) {
     setNewMembers(prev => {
       const existing = new Set([
         ...localMembers.map(m => m.display_name),
         ...prev.map(m => m.display_name),
       ])
-      return [...prev, ...contacts.filter(c => !existing.has(c.display_name))]
+      return [...prev, ...selected.filter(c => !existing.has(c.display_name))]
     })
+    setShowPicker(false)
+    setPickerContacts([])
   }
 
   async function handleSaveEdits() {
@@ -279,6 +289,17 @@ export function GroupDetail({ group, members }: Props) {
   if (editMode) {
     return (
       <>
+        {showPicker && (
+          <ContactPicker
+            contacts={pickerContacts}
+            existingNames={new Set([
+              ...localMembers.map(m => m.display_name),
+              ...newMembers.map(m => m.display_name),
+            ])}
+            onAdd={handlePickerAdd}
+            onClose={() => { setShowPicker(false); setPickerContacts([]) }}
+          />
+        )}
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
           <div className="flex items-center gap-3">
             <input
