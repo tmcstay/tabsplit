@@ -30,7 +30,7 @@ export function PayIdBanner({
   }
 
   const name = organiseName ?? 'the organiser'
-  const label = payidLabel ? ` via ${payidLabel}` : ''
+  const label = payidLabel ? ` via PayID (${payidLabel})` : ' via PayID'
 
   return (
     <div className="rounded-xl bg-teal-50 px-4 py-4 ring-1 ring-teal-200">

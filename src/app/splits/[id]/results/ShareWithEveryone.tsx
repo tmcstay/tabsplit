@@ -58,7 +58,7 @@ export function ShareWithEveryone({
     const firstName = attendee.display_name.split(' ')[0]
     let msg = `Hey ${firstName}, here's your share of ${splitTitle}: $${attendee.total.toFixed(2)}.`
     if (organiserPayid) {
-      msg += `\nPay via ${organiserPayidLabel ?? 'PayID'}: ${organiserPayid}`
+      msg += `\nPay via PayID (${organiserPayidLabel ?? 'Other'}): ${organiserPayid}`
     }
     return msg
   }
@@ -149,7 +149,7 @@ export function ShareWithEveryone({
                   className="mt-3 flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200"
                 >
                   <div className="text-left">
-                    <p className="text-xs text-slate-400">{organiserPayidLabel ?? 'PayID'}</p>
+                    <p className="text-xs text-slate-400">PayID ({organiserPayidLabel ?? 'Other'})</p>
                     <p className="text-sm font-semibold text-gwfc-blue">{organiserPayid}</p>
                   </div>
                   <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
