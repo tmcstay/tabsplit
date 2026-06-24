@@ -3,15 +3,38 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+const GWFC_GREEN = '#1caebb'
+const GWFC_LIGHT_BLUE = '#1079bf'
+const INACTIVE = '#94a3b8'
+
 function HomeIcon({ active }: { active: boolean }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-      stroke={active ? '#0d9488' : '#94a3b8'} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12l9-9 9 9" />
+      stroke={active ? GWFC_GREEN : INACTIVE} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" />
       <path d="M9 21V12h6v9" />
-      <rect x="3" y="11" width="18" height="10" rx="1" fill="none" />
-      <path d="M2.25 12l8.954-8.955a1.125 1.125 0 011.591 0L21.75 12" />
-      <path d="M4.5 10.5V20.25A.75.75 0 005.25 21H9v-4.5h6V21h3.75a.75.75 0 00.75-.75V10.5" />
+    </svg>
+  )
+}
+
+function GroupsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+      stroke={active ? GWFC_GREEN : INACTIVE} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="7" r="3.5" />
+      <path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M22 20c0-2.2-1.8-4-4-4" />
+    </svg>
+  )
+}
+
+function SplitsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+      stroke={active ? GWFC_GREEN : INACTIVE} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+      <path d="M9 7h6M9 11h6M9 15h4" />
     </svg>
   )
 }
@@ -19,14 +42,14 @@ function HomeIcon({ active }: { active: boolean }) {
 function ProfileIcon({ active }: { active: boolean }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-      stroke={active ? '#0d9488' : '#94a3b8'} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      stroke={active ? GWFC_GREEN : INACTIVE} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="8" r="3.75" />
       <path d="M4.5 20.118a7.5 7.5 0 0115 0" />
     </svg>
   )
 }
 
-const AUTH_PATHS = ['/login', '/callback']
+const AUTH_PATHS = ['/login', '/callback', '/forgot-password', '/reset-password']
 
 export function BottomNav() {
   const pathname = usePathname()
@@ -36,28 +59,63 @@ export function BottomNav() {
   }
 
   const isHome = pathname === '/'
+  const isGroups = pathname.startsWith('/groups')
+  const isSplits = pathname.startsWith('/splits') && !pathname.startsWith('/splits/new')
   const isProfile = pathname.startsWith('/profile')
 
+  function labelCls(active: boolean) {
+    return `text-xs font-medium transition-colors ${active ? 'text-gwfc-green' : 'text-slate-400'}`
+  }
+
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white">
-      <div className="flex h-16 items-center">
-        <Link
-          href="/"
-          className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors ${
-            isHome ? 'text-teal-600' : 'text-slate-400 hover:text-slate-600'
-          }`}
-        >
+    <nav
+      className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white"
+      style={{ overflow: 'visible' }}
+    >
+      <div className="relative flex h-16 items-center" style={{ overflow: 'visible' }}>
+        {/* Home */}
+        <Link href="/" className="flex flex-1 flex-col items-center gap-0.5 py-2">
           <HomeIcon active={isHome} />
-          <span>Home</span>
+          <span className={labelCls(isHome)}>Home</span>
         </Link>
-        <Link
-          href="/profile"
-          className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors ${
-            isProfile ? 'text-teal-600' : 'text-slate-400 hover:text-slate-600'
-          }`}
-        >
+
+        {/* Groups */}
+        <Link href="/groups" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+          <GroupsIcon active={isGroups} />
+          <span className={labelCls(isGroups)}>Groups</span>
+        </Link>
+
+        {/* New Split — raised centre button */}
+        <div className="relative flex flex-1 flex-col items-center">
+          <Link
+            href="/splits/new"
+            aria-label="New Split"
+            className="absolute flex items-center justify-center rounded-full"
+            style={{
+              width: 50,
+              height: 50,
+              top: -30,
+              background: `linear-gradient(135deg, ${GWFC_GREEN}, ${GWFC_LIGHT_BLUE})`,
+              boxShadow: '0 4px 14px rgba(28, 174, 187, 0.45)',
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+              stroke="white" strokeWidth="2.25" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </Link>
+        </div>
+
+        {/* Splits */}
+        <Link href="/splits" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+          <SplitsIcon active={isSplits} />
+          <span className={labelCls(isSplits)}>Splits</span>
+        </Link>
+
+        {/* Profile */}
+        <Link href="/profile" className="flex flex-1 flex-col items-center gap-0.5 py-2">
           <ProfileIcon active={isProfile} />
-          <span>Profile</span>
+          <span className={labelCls(isProfile)}>Profile</span>
         </Link>
       </div>
     </nav>

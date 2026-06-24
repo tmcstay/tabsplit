@@ -27,3 +27,7 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+@utility safe-top {
+  padding-top: max(env(safe-area-inset-top), 20px);
+}

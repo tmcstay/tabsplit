@@ -1,35 +1,10 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { SplitList } from './SplitList'
 
-type GroupWithCount = Tables<'groups'> & { group_members: [{ count: number }] | [] }
 type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
-
-function GroupCard({ group }: { group: GroupWithCount }) {
-  const count = group.group_members[0]?.count ?? 0
-  return (
-    <Link
-      href={`/groups/${group.id}`}
-      className="flex w-36 shrink-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
-    >
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-          stroke="#94a3b8" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="9" cy="7" r="3.5" />
-          <path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6" />
-          <circle cx="17" cy="9" r="2.5" />
-          <path d="M22 20c0-2.2-1.8-4-4-4" />
-        </svg>
-      </div>
-      <p className="truncate text-sm font-semibold text-slate-900">{group.name}</p>
-      <p className="mt-0.5 text-xs text-slate-400">
-        {count} {count === 1 ? 'member' : 'members'}
-      </p>
-    </Link>
-  )
-}
+type OpenSplitWithItems = { id: string; items: Array<{ price: number }> | null }
 
 const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null
 
@@ -38,46 +13,71 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: groups }, { data: splits }] = await Promise.all([
+  const [{ data: openSplitsRaw }, { data: splits }] = await Promise.all([
     supabase
-      .from('groups')
-      .select('*, group_members(count)')
+      .from('splits')
+      .select('id, items(price)')
       .eq('organiser_id', user.id)
-      .eq('saved', true)
-      .order('name'),
+      .neq('status', 'finalised'),
     supabase
       .from('splits')
       .select('*, attendees(count)')
       .eq('organiser_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(10),
   ])
 
-  const hasSavedGroups = (groups?.length ?? 0) > 0
+  const openSplits = (openSplitsRaw ?? []) as unknown as OpenSplitWithItems[]
+  const openCount = openSplits.length
+  const owedTotal = openSplits.reduce((total, s) => {
+    return total + (s.items ?? []).reduce((sum, item) => sum + Number(item.price), 0)
+  }, 0)
+
+  const formattedTotal = new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 2,
+  }).format(owedTotal)
 
   return (
-    <div className="flex min-h-screen flex-col pb-36">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">TabSplit</h1>
+    <div className="flex min-h-screen flex-col pb-24">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
+        <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">TabSplit</h1>
         {commitSha && (
           <p className="font-mono text-[10px] text-slate-300">{commitSha}</p>
         )}
       </header>
 
-      <main className="flex-1 space-y-8 py-6">
-        {hasSavedGroups && (
-          <section>
-            <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Saved Groups
-            </h2>
-            <div className="flex gap-3 overflow-x-auto px-4 pb-1">
-              {(groups as unknown as GroupWithCount[]).map(group => (
-                <GroupCard key={group.id} group={group} />
-              ))}
+      <main className="flex-1 space-y-6 py-5">
+        {/* Hero: You're Owed card */}
+        {openCount === 0 ? (
+          <div
+            className="mx-4 rounded-2xl px-5 py-6 text-white"
+            style={{ background: 'linear-gradient(135deg, #425197, #1079bf)' }}
+          >
+            <div className="flex items-center gap-2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                stroke="white" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              <p className="text-base font-semibold">All settled up</p>
             </div>
-          </section>
+            <p className="mt-1 text-sm opacity-70">No outstanding amounts</p>
+          </div>
+        ) : (
+          <div
+            className="mx-4 rounded-2xl px-5 py-6 text-white"
+            style={{ background: 'linear-gradient(135deg, #425197, #1079bf)' }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider opacity-80">You&apos;re Owed</p>
+            <p className="mt-1 text-4xl font-bold">{formattedTotal}</p>
+            <p className="mt-1 text-sm opacity-70">
+              across {openCount} open {openCount === 1 ? 'split' : 'splits'}
+            </p>
+          </div>
         )}
 
+        {/* Recent Splits */}
         <section className="px-4">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent Splits
@@ -85,23 +85,6 @@ export default async function HomePage() {
           <SplitList initialSplits={(splits ?? []) as unknown as SplitWithCount[]} />
         </section>
       </main>
-
-      <div className="fixed bottom-16 inset-x-0 px-4 pb-3">
-        <div className="flex gap-3">
-          <Link
-            href="/groups/new"
-            className="flex flex-1 items-center justify-center rounded-2xl bg-white py-3.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
-          >
-            New Group
-          </Link>
-          <Link
-            href="/splits/new"
-            className="flex flex-1 items-center justify-center rounded-2xl bg-teal-600 py-3.5 text-sm font-semibold text-white shadow-lg active:bg-teal-700"
-          >
-            New Split
-          </Link>
-        </div>
-      </div>
     </div>
   )
 }

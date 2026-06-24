@@ -17,9 +17,77 @@ function ClientDate({ iso }: { iso: string }) {
 }
 
 const STATUS_STYLES: Record<SplitStatus, { label: string; cls: string }> = {
-  pending:   { label: 'Pending',   cls: 'bg-amber-50 text-amber-700' },
-  draft:     { label: 'Draft',     cls: 'bg-slate-100 text-slate-500' },
+  pending:   { label: 'Pending',   cls: 'bg-blue-50 text-blue-600' },
+  draft:     { label: 'Draft',     cls: 'bg-amber-50 text-amber-700' },
   finalised: { label: 'Finalised', cls: 'bg-green-50 text-green-700' },
+}
+
+// Deterministic gradient from split ID
+const GRADIENTS = [
+  'linear-gradient(135deg, #14b8a6, #3b82f6)',
+  'linear-gradient(135deg, #f97316, #ef4444)',
+  'linear-gradient(135deg, #8b5cf6, #6366f1)',
+  'linear-gradient(135deg, #1caebb, #1079bf)',
+]
+
+function getGradient(id: string): string {
+  const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  return GRADIENTS[hash % GRADIENTS.length]
+}
+
+function getSplitIcon(title: string): 'coffee' | 'soup' | 'pizza' | 'cocktail' | 'burger' | 'receipt' {
+  const t = title.toLowerCase()
+  if (t.includes('coffee') || t.includes('cafe') || t.includes('brunch')) return 'coffee'
+  if (t.includes('pizza')) return 'pizza'
+  if (t.includes('bar') || t.includes('drink') || t.includes('cocktail') || t.includes('pub')) return 'cocktail'
+  if (t.includes('burger')) return 'burger'
+  if (t.includes('dinner') || t.includes('lunch') || t.includes('restaurant') || t.includes('food') || t.includes('soup')) return 'soup'
+  return 'receipt'
+}
+
+function SplitIconSvg({ type }: { type: ReturnType<typeof getSplitIcon> }) {
+  const props = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none' as const, stroke: 'white', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
+  if (type === 'coffee') return (
+    <svg {...props}>
+      <path d="M18 8h1a4 4 0 010 8h-1" />
+      <path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" />
+      <line x1="6" y1="1" x2="6" y2="4" />
+      <line x1="10" y1="1" x2="10" y2="4" />
+      <line x1="14" y1="1" x2="14" y2="4" />
+    </svg>
+  )
+  if (type === 'pizza') return (
+    <svg {...props}>
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+      <path d="M2 12h20M12 2v20" />
+      <circle cx="8" cy="9" r="1.5" fill="white" stroke="none" />
+      <circle cx="15" cy="15" r="1.5" fill="white" stroke="none" />
+    </svg>
+  )
+  if (type === 'cocktail') return (
+    <svg {...props}>
+      <path d="M8 22h8M12 11v11M3 3l9 8 9-8H3z" />
+    </svg>
+  )
+  if (type === 'burger') return (
+    <svg {...props}>
+      <path d="M4 13h16M4 17h16M6 9c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <rect x="3" y="17" width="18" height="4" rx="1" />
+    </svg>
+  )
+  if (type === 'soup') return (
+    <svg {...props}>
+      <path d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+      <path d="M4.22 15h15.56M8 11h.01M12 9h.01M16 11h.01" />
+    </svg>
+  )
+  // receipt (default)
+  return (
+    <svg {...props}>
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+      <path d="M9 7h6M9 11h6M9 15h4" />
+    </svg>
+  )
 }
 
 function StatusBadge({ status }: { status: SplitStatus }) {
@@ -68,26 +136,40 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
     setConfirming(false)
   }
 
+  const iconType = getSplitIcon(split.title)
+  const gradient = getGradient(split.id)
+
   return (
     <div className="relative">
       <Link
         href={`/splits/${split.id}`}
-        className="block rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
+        className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 pr-8">
-            <p className="truncate text-base font-semibold text-slate-900">{split.title}</p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              <ClientDate iso={split.created_at} />
-              {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
-            </p>
-          </div>
+        {/* Gradient icon tile */}
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: gradient }}
+        >
+          <SplitIconSvg type={iconType} />
+        </div>
+
+        {/* Text content */}
+        <div className="min-w-0 flex-1 pr-16">
+          <p className="truncate text-sm font-semibold text-gwfc-blue">{split.title}</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            <ClientDate iso={split.created_at} />
+            {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
+          </p>
+        </div>
+
+        {/* Status pill */}
+        <div className="shrink-0">
           <StatusBadge status={split.status} />
         </div>
       </Link>
 
-      {/* Delete controls — float over the card */}
-      <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
+      {/* Delete controls */}
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
         {confirming && (
           <>
             <button
@@ -139,9 +221,9 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
             <path d="M9 7h6M9 11h6M9 15h4" />
           </svg>
         </div>
-        <p className="text-base font-semibold text-slate-900">No splits yet</p>
+        <p className="text-base font-semibold text-gwfc-blue">No splits yet</p>
         <p className="mt-1.5 max-w-xs text-sm text-slate-400">
-          Start by adding a group or a new split.
+          Tap the + button to get started.
         </p>
       </div>
     )

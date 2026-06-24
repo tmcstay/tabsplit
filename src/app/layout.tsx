@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="en-AU"
       className={`${geistSans.variable} ${geistMono.variable} h-dvh antialiased`}
     >
-      <body className="h-full overflow-y-auto overscroll-none bg-slate-50 font-sans text-slate-900">
+      <body className="h-full overflow-y-auto overscroll-none bg-slate-50 font-sans text-gwfc-blue">
         {children}
         <BottomNav />
         <Script id="eruda" strategy="afterInteractive">{`
