@@ -32,6 +32,17 @@ export function ShareWithEveryone({
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [method, setMethod] = useState<Method>('link')
+
+  function openModal() {
+    // DEBUG — remove once phone flow confirmed working
+    console.log('[ShareWithEveryone] attendees on open:', attendees.map(a => ({
+      name: a.display_name,
+      phone: a.phone,
+      email: a.email,
+      total: a.total,
+    })))
+    setOpen(true)
+  }
   const [sentIds, setSentIds] = useState<Set<string>>(new Set())
   const [payidCopied, setPayidCopied] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -68,13 +79,14 @@ export function ShareWithEveryone({
       setSentIds(prev => new Set([...prev, attendee.id]))
     } else {
       const result = await shareText({ title: splitTitle, text: message, url })
-      if (result !== 'dismissed') {
+      if (result === 'shared') {
         setSentIds(prev => new Set([...prev, attendee.id]))
+      } else if (result === 'copied') {
+        setSentIds(prev => new Set([...prev, attendee.id]))
+        setToast(`Copied ${firstName}'s message — paste it into your messaging app`)
+        setTimeout(() => setToast(null), 4000)
       }
-      if (result === 'copied') {
-        setToast(`Copied for ${firstName}`)
-        setTimeout(() => setToast(null), 2500)
-      }
+      // 'dismissed' = user cancelled share sheet — do not mark as sent
     }
   }
 
@@ -96,7 +108,7 @@ export function ShareWithEveryone({
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openModal}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gwfc-green py-3.5 text-sm font-semibold text-white active:opacity-90"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"

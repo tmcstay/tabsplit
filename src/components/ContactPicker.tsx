@@ -42,7 +42,8 @@ export function ContactPicker({ contacts, existingNames, onAdd, onClose }: Props
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
-    return q ? contacts.filter(c => c.display_name.toLowerCase().includes(q)) : contacts
+    if (!q) return []
+    return contacts.filter(c => c.display_name.toLowerCase().includes(q))
   }, [contacts, search])
 
   const selectableFiltered = useMemo(
@@ -104,7 +105,6 @@ export function ContactPicker({ contacts, existingNames, onAdd, onClose }: Props
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="flex-1 py-2 text-sm text-gwfc-blue placeholder-slate-400 outline-none"
-              autoFocus
             />
             {search && (
               <button type="button" onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600" aria-label="Clear search">
@@ -115,26 +115,38 @@ export function ContactPicker({ contacts, existingNames, onAdd, onClose }: Props
             )}
           </div>
 
-          {/* Select all + counter */}
-          <div className="mt-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              disabled={selectableFiltered.length === 0}
-              className="flex items-center gap-2 disabled:opacity-40"
-            >
-              <Checkbox checked={allFilteredSelected} />
-              <span className="text-sm text-slate-500">Select all</span>
-            </button>
-            <span className="text-xs text-slate-400">
-              {selectedCount > 0 ? `${selectedCount} selected` : 'None selected'}
-            </span>
-          </div>
+          {/* Select all + counter — only visible when search is active */}
+          {search.trim() && (
+            <div className="mt-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                disabled={selectableFiltered.length === 0}
+                className="flex items-center gap-2 disabled:opacity-40"
+              >
+                <Checkbox checked={allFilteredSelected} />
+                <span className="text-sm text-slate-500">Select all</span>
+              </button>
+              <span className="text-xs text-slate-400">
+                {selectedCount > 0 ? `${selectedCount} selected` : 'None selected'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Contact list */}
         <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
+          {!search.trim() ? (
+            <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                className="mb-3">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <p className="text-sm text-slate-400">Start typing to search your contacts</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-slate-400">No contacts found.</p>
           ) : (
             filtered.map(contact => {
