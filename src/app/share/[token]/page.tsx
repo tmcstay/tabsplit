@@ -165,9 +165,9 @@ export default async function SharePage({
   })
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
+    <div className="min-h-screen bg-slate-50 pb-8">
       {/* Header */}
-      <header className="border-b border-slate-200 bg-white px-4 py-5">
+      <header className="border-b border-slate-200 bg-white px-4 pb-5 safe-top">
         <div className="mx-auto max-w-lg">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">TabSplit</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
@@ -178,8 +178,8 @@ export default async function SharePage({
       <main className="mx-auto max-w-lg space-y-4 px-4 py-6">
         {/* Grand total */}
         {split.total != null && (
-          <div className="rounded-xl bg-slate-900 px-5 py-4 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
+          <div className="rounded-2xl px-5 py-4 text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #425197, #1079bf)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
         )}

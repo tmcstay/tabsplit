@@ -70,17 +70,17 @@ export function BottomNav() {
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white"
-      style={{ overflow: 'visible' }}
+      style={{ overflow: 'visible', paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
     >
-      <div className="relative flex h-16 items-center" style={{ overflow: 'visible' }}>
+      <div className="relative flex h-[68px] items-center" style={{ overflow: 'visible' }}>
         {/* Home */}
-        <Link href="/" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+        <Link href="/" className="flex flex-1 flex-col items-center gap-0.5 py-3">
           <HomeIcon active={isHome} />
           <span className={labelCls(isHome)}>Home</span>
         </Link>
 
         {/* Groups */}
-        <Link href="/groups" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+        <Link href="/groups" className="flex flex-1 flex-col items-center gap-0.5 py-3">
           <GroupsIcon active={isGroups} />
           <span className={labelCls(isGroups)}>Groups</span>
         </Link>
@@ -107,13 +107,13 @@ export function BottomNav() {
         </div>
 
         {/* Splits */}
-        <Link href="/splits" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+        <Link href="/splits" className="flex flex-1 flex-col items-center gap-0.5 py-3">
           <SplitsIcon active={isSplits} />
           <span className={labelCls(isSplits)}>Splits</span>
         </Link>
 
         {/* Profile */}
-        <Link href="/profile" className="flex flex-1 flex-col items-center gap-0.5 py-2">
+        <Link href="/profile" className="flex flex-1 flex-col items-center gap-0.5 py-3">
           <ProfileIcon active={isProfile} />
           <span className={labelCls(isProfile)}>Profile</span>
         </Link>

@@ -44,10 +44,10 @@ export default async function NewSplitPage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">New Split</h1>
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
+        <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">New Split</h1>
       </header>
-      <main className="flex-1 px-4 py-6 pb-24">
+      <main className="flex-1 px-4 py-6 pb-32">
         <NewSplitForm
           userId={user.id}
           groupId={groupId ?? null}

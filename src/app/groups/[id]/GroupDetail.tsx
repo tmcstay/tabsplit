@@ -300,7 +300,7 @@ export function GroupDetail({ group, members }: Props) {
             onClose={() => { setShowPicker(false); setPickerContacts([]) }}
           />
         )}
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
           <div className="flex items-center gap-3">
             <input
               type="text"
@@ -523,7 +523,7 @@ export function GroupDetail({ group, members }: Props) {
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

@@ -69,7 +69,7 @@ export default async function GroupsPage() {
     .order('name')
 
   return (
-    <div className="flex min-h-screen flex-col pb-24">
+    <div className="flex min-h-screen flex-col pb-32">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
         <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">Groups</h1>
       </header>

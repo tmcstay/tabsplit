@@ -5,30 +5,30 @@ import { ShareButton } from './ShareButton'
 import { EditButton } from './EditButton'
 import { PersonCard } from './PersonCard'
 import type { PersonResult } from './PersonCard'
-import { BulkShareButton } from './BulkShareButton'
+import { ShareWithEveryone } from './ShareWithEveryone'
+import type { ModalAttendee } from './ShareWithEveryone'
+import { ReceiptViewer } from './ReceiptViewer'
 import { PayIdBanner } from '@/components/PayIdBanner'
 
-function calculateResults(
+type AttendeeAcc = {
+  total: number
+  lines: { description: string; share: number }[]
+  discountLines: { description: string; amount: number }[]
+}
+
+function buildAcc(
   attendees: Tables<'attendees'>[],
-  attendeeGroups: Tables<'attendee_groups'>[],
   items: Tables<'items'>[],
   assignments: Tables<'item_assignments'>[],
   discounts: Tables<'discounts'>[],
-  discountAttendees: Tables<'discount_attendees'>[],
-  organiserId: string
-): PersonResult[] {
-  // Count assignees per item for splitting
+  discountAttendees: Tables<'discount_attendees'>[]
+): Record<string, AttendeeAcc> {
   const itemCount: Record<string, number> = {}
   for (const a of assignments) {
     itemCount[a.item_id] = (itemCount[a.item_id] ?? 0) + 1
   }
 
-  // Per-attendee accumulation
-  const acc: Record<string, {
-    total: number
-    lines: { description: string; share: number }[]
-    discountLines: { description: string; amount: number }[]
-  }> = {}
+  const acc: Record<string, AttendeeAcc> = {}
   for (const a of attendees) acc[a.id] = { total: 0, lines: [], discountLines: [] }
 
   for (const a of assignments) {
@@ -39,7 +39,6 @@ function calculateResults(
     acc[a.attendee_id].lines.push({ description: item.description, share })
   }
 
-  // Apply discounts
   for (const discount of discounts) {
     const appliedIds = discountAttendees
       .filter(da => da.discount_id === discount.id)
@@ -59,7 +58,6 @@ function calculateResults(
         })
       }
     } else {
-      // Flat: distribute proportionally by each attendee's share of the group's combined total
       const selectedTotals = appliedIds.map(id => ({ id, rawTotal: acc[id].total }))
       const sumTotal = selectedTotals.reduce((s, t) => s + t.rawTotal, 0)
       if (sumTotal > 0) {
@@ -76,6 +74,14 @@ function calculateResults(
     }
   }
 
+  return acc
+}
+
+function calculateResults(
+  acc: Record<string, AttendeeAcc>,
+  attendees: Tables<'attendees'>[],
+  attendeeGroups: Tables<'attendee_groups'>[]
+): PersonResult[] {
   const grouped = new Set<string>()
   const results: PersonResult[] = []
 
@@ -85,7 +91,7 @@ function calculateResults(
     const total = members.reduce((s, m) => Math.round((s + (acc[m.id]?.total ?? 0)) * 100) / 100, 0)
     const lines = members.flatMap(m => acc[m.id]?.lines ?? [])
     const discountLines = members.flatMap(m => acc[m.id]?.discountLines ?? [])
-    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines, isOrganiser: false })
+    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines })
   }
 
   for (const a of attendees) {
@@ -96,7 +102,6 @@ function calculateResults(
       total: acc[a.id]?.total ?? 0,
       itemLines: acc[a.id]?.lines ?? [],
       discountLines: acc[a.id]?.discountLines ?? [],
-      isOrganiser: a.user_id === organiserId,
     })
   }
 
@@ -145,15 +150,25 @@ export default async function SplitResultsPage({
       : Promise.resolve({ data: [] as Tables<'discount_attendees'>[] }),
   ])
 
-  const results = calculateResults(
+  const acc = buildAcc(
     attendees ?? [],
-    attendeeGroups ?? [],
     items ?? [],
     rawAssignments ?? [],
     discounts ?? [],
-    discountAttendees ?? [],
-    user.id
+    discountAttendees ?? []
   )
+
+  const results = calculateResults(acc, attendees ?? [], attendeeGroups ?? [])
+
+  const modalAttendees: ModalAttendee[] = (attendees ?? [])
+    .filter(a => a.user_id !== user.id)
+    .map(a => ({
+      id: a.id,
+      display_name: a.display_name,
+      phone: a.phone ?? null,
+      email: a.email ?? null,
+      total: acc[a.id]?.total ?? 0,
+    }))
 
   let signedReceiptUrl: string | null = null
   if (split.receipt_url) {
@@ -169,8 +184,8 @@ export default async function SplitResultsPage({
   })
 
   return (
-    <div className="flex min-h-screen flex-col pb-24">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+    <div className="flex min-h-screen flex-col pb-32">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
@@ -184,20 +199,13 @@ export default async function SplitResultsPage({
       </header>
 
       <main className="flex-1 space-y-4 px-4 py-6">
-        {/* Receipt thumbnail */}
-        {signedReceiptUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={signedReceiptUrl}
-            alt="Receipt"
-            className="max-h-32 w-full rounded-xl object-cover shadow-sm ring-1 ring-slate-200"
-          />
-        )}
-
-        {/* Grand total */}
+        {/* Grand total — gradient card */}
         {split.total != null && (
-          <div className="rounded-xl bg-slate-900 px-5 py-4 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total</p>
+          <div
+            className="rounded-2xl px-5 py-4 text-white shadow-sm"
+            style={{ background: 'linear-gradient(135deg, #425197, #1079bf)' }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">Total</p>
             <p className="mt-1 text-3xl font-bold">${split.total.toFixed(2)}</p>
           </div>
         )}
@@ -211,20 +219,26 @@ export default async function SplitResultsPage({
           />
         )}
 
-        {/* Bulk share CTA */}
+        {/* Share with everyone */}
         {shareToken && (
-          <BulkShareButton token={shareToken} splitTitle={split.title} />
+          <ShareWithEveryone
+            splitTitle={split.title}
+            shareToken={shareToken}
+            attendees={modalAttendees}
+            organiserPayid={organiserProfile?.payid ?? null}
+            organiserPayidLabel={organiserProfile?.payid_label ?? null}
+          />
         )}
 
         {/* Per-person results */}
         {results.map(person => (
-          <PersonCard
-            key={person.id}
-            person={person}
-            shareToken={shareToken ?? undefined}
-            splitTitle={split.title}
-          />
+          <PersonCard key={person.id} person={person} />
         ))}
+
+        {/* Receipt at the bottom — collapsed by default */}
+        {signedReceiptUrl && (
+          <ReceiptViewer url={signedReceiptUrl} />
+        )}
       </main>
     </div>
   )

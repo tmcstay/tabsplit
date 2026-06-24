@@ -488,7 +488,7 @@ export function SplitDetail({
   if (items.length === 0) {
     return (
       <>
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => router.back()} className="text-slate-400 hover:text-slate-600" aria-label="Go back">
               <BackIcon />
@@ -552,7 +552,7 @@ export function SplitDetail({
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-3 safe-top">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <button type="button" onClick={() => router.back()} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Go back">
@@ -743,7 +743,7 @@ export function SplitDetail({
       </main>
 
       {/* Summary bar */}
-      <div className="fixed inset-x-0 bottom-16 border-t border-slate-200 bg-white px-4 py-2.5">
+      <div className="fixed inset-x-0 border-t border-slate-200 bg-white px-4 py-2.5" style={{ bottom: 'calc(4rem + max(env(safe-area-inset-bottom), 12px))' }}>
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-500">
             Assigned: <span className="font-semibold text-gwfc-blue">{fmt(totalAssigned)}</span>
