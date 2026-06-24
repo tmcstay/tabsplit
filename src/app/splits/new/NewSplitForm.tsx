@@ -156,7 +156,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <div className="space-y-6">
         <StepIndicator step={1} />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Name this split</h2>
+          <h2 className="text-lg font-semibold text-gwfc-blue">Name this split</h2>
           {groupName && (
             <p className="mt-1 text-sm text-slate-500">Splitting with {groupName}</p>
           )}
@@ -172,7 +172,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
             value={title}
             onChange={e => setTitle(e.target.value)}
             autoFocus
-            className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+            className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
         <button
@@ -194,7 +194,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       <div className="space-y-6">
         <StepIndicator step={2} />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Who&apos;s splitting?</h2>
+          <h2 className="text-lg font-semibold text-gwfc-blue">Who&apos;s splitting?</h2>
           <p className="mt-1 text-sm text-slate-500">
             {groupName ? `Pre-filled from ${groupName}. Remove anyone who isn't here.` : 'Add everyone sharing this bill.'}
           </p>
@@ -204,9 +204,9 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         {attendees.length > 0 && (
           <ul className="space-y-2">
             {attendees.map(a => (
-              <li key={a.id} className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+              <li key={a.id} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{a.display_name}</p>
+                  <p className="truncate text-sm font-medium text-gwfc-blue">{a.display_name}</p>
                   {(a.phone || a.email) && (
                     <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
                   )}
@@ -234,21 +234,21 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
             placeholder="Name"
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="tel"
             placeholder="Phone (optional)"
             value={newPhone}
             onChange={e => setNewPhone(e.target.value)}
-            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="email"
             placeholder="Email (optional)"
             value={newEmail}
             onChange={e => setNewEmail(e.target.value)}
-            className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
           />
           <button
             type="submit"
@@ -304,7 +304,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
     <div className="space-y-6 pb-32">
       <StepIndicator step={3} />
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Upload the receipt</h2>
+        <h2 className="text-lg font-semibold text-gwfc-blue">Upload the receipt</h2>
         <p className="mt-1 text-sm text-slate-500">
           Load a photo of the receipt to split the bill.
         </p>

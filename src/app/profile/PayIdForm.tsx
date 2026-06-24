@@ -50,7 +50,7 @@ export function PayIdForm({
           <select
             value={payidLabel}
             onChange={e => setPayidLabel(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
           >
             {PAYID_LABELS.map(l => (
               <option key={l} value={l}>{l}</option>
@@ -65,7 +65,7 @@ export function PayIdForm({
             value={payid}
             onChange={e => setPayid(e.target.value)}
             placeholder={PLACEHOLDERS[payidLabel] ?? ''}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 

@@ -170,7 +170,7 @@ export default async function SharePage({
       <header className="border-b border-slate-200 bg-white px-4 py-5">
         <div className="mx-auto max-w-lg">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">TabSplit</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{split.title}</h1>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
           <p className="text-sm text-slate-400">{dateStr}</p>
         </div>
       </header>
@@ -195,10 +195,10 @@ export default async function SharePage({
 
         {/* Per-person breakdown */}
         {results.map(person => (
-          <div key={person.id} className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+          <div key={person.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
             <div className="flex items-center justify-between px-4 py-4">
               <div>
-                <p className="font-semibold text-slate-900">{person.label}</p>
+                <p className="font-semibold text-gwfc-blue">{person.label}</p>
                 <p className="text-xs text-slate-400">
                   {person.itemLines.length} item{person.itemLines.length !== 1 ? 's' : ''}
                   {person.discountLines.length > 0 && (
@@ -208,14 +208,14 @@ export default async function SharePage({
                   )}
                 </p>
               </div>
-              <p className="text-xl font-bold text-slate-900">${person.total.toFixed(2)}</p>
+              <p className="text-xl font-bold text-gwfc-blue">${person.total.toFixed(2)}</p>
             </div>
             {(person.itemLines.length > 0 || person.discountLines.length > 0) && (
               <div className="border-t border-slate-100">
                 {person.itemLines.map((line, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
                     <span className="text-slate-600">{line.description}</span>
-                    <span className="font-medium text-slate-900">${line.share.toFixed(2)}</span>
+                    <span className="font-medium text-gwfc-blue">${line.share.toFixed(2)}</span>
                   </div>
                 ))}
                 {person.discountLines.map((line, i) => (

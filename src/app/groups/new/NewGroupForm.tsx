@@ -83,7 +83,7 @@ async function tryImportContacts(): Promise<Member[] | null> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const inputClass =
-  'w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
+  'w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
 
 export function NewGroupForm({ userId }: Props) {
   const router = useRouter()
@@ -241,7 +241,7 @@ export function NewGroupForm({ userId }: Props) {
       <div className="space-y-6">
         <StepIndicator step={1} />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Name your group</h2>
+          <h2 className="text-lg font-semibold text-gwfc-blue">Name your group</h2>
           <p className="mt-1 text-sm text-slate-500">
             Give this group a name you&apos;ll recognise later.
           </p>
@@ -279,7 +279,7 @@ export function NewGroupForm({ userId }: Props) {
       <div className="space-y-6">
         <StepIndicator step={2} />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Add members</h2>
+          <h2 className="text-lg font-semibold text-gwfc-blue">Add members</h2>
           <p className="mt-1 text-sm text-slate-500">
             Add the people you split bills with. Each person needs at least a phone number or email.
           </p>
@@ -298,7 +298,7 @@ export function NewGroupForm({ userId }: Props) {
             <select
               value={dialCode}
               onChange={e => setDialCode(e.target.value)}
-              className="rounded-lg px-2 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+              className="rounded-lg px-2 py-2.5 text-sm text-gwfc-blue shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
             >
               {DIAL_CODES.map(d => (
                 <option key={d.code} value={d.code}>{d.label}</option>
@@ -309,7 +309,7 @@ export function NewGroupForm({ userId }: Props) {
               placeholder="Mobile number (optional)"
               value={newPhone}
               onChange={e => setNewPhone(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+              className="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <input
@@ -349,7 +349,7 @@ export function NewGroupForm({ userId }: Props) {
 
         {/* Add from existing group */}
         {groupsLoaded && savedGroups.length > 0 && (
-          <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
             <p className="border-b border-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Add from existing group
             </p>
@@ -360,7 +360,7 @@ export function NewGroupForm({ userId }: Props) {
                   onClick={() => setExpandedGroupId(expandedGroupId === g.id ? null : g.id)}
                   className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
                 >
-                  <span className="text-sm font-medium text-slate-900">{g.name}</span>
+                  <span className="text-sm font-medium text-gwfc-blue">{g.name}</span>
                   <svg
                     width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
                     stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
@@ -395,7 +395,7 @@ export function NewGroupForm({ userId }: Props) {
                               )}
                             </span>
                             <div className="min-w-0 text-left">
-                              <p className="truncate text-sm text-slate-900">{gm.display_name}</p>
+                              <p className="truncate text-sm text-gwfc-blue">{gm.display_name}</p>
                               {(gm.phone || gm.email) && (
                                 <p className="truncate text-xs text-slate-400">{gm.phone ?? gm.email}</p>
                               )}
@@ -419,9 +419,9 @@ export function NewGroupForm({ userId }: Props) {
             </p>
             <ul className="space-y-2">
               {members.map(m => (
-                <li key={m.id} className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                <li key={m.id} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">{m.display_name}</p>
+                    <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
                     {(m.phone || m.email) && (
                       <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
                     )}
@@ -470,23 +470,23 @@ export function NewGroupForm({ userId }: Props) {
     <div className="space-y-6">
       <StepIndicator step={3} />
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Options</h2>
+        <h2 className="text-lg font-semibold text-gwfc-blue">Options</h2>
         <p className="mt-1 text-sm text-slate-500">
           Saving the group lets you reuse it for future splits.
         </p>
       </div>
 
       {/* Member summary */}
-      <div className="rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Members</p>
         <p className="mt-1 text-sm text-slate-700">{members.map(m => m.display_name).join(', ')}</p>
       </div>
 
       {/* Save toggle */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between px-4 py-4">
           <div>
-            <p className="text-sm font-medium text-slate-900">Save this group</p>
+            <p className="text-sm font-medium text-gwfc-blue">Save this group</p>
             <p className="text-xs text-slate-400">Appears in your saved groups on the home screen</p>
           </div>
           <button

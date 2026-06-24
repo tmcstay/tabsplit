@@ -21,7 +21,7 @@ export default async function ProfilePage() {
     <div className="flex min-h-screen flex-col pb-20">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">Profile</h1>
+        <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">Profile</h1>
       </header>
 
       <main className="flex-1 px-4 py-6 space-y-4">
@@ -30,7 +30,7 @@ export default async function ProfilePage() {
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Account
           </p>
-          <p className="mt-2 text-sm font-medium text-slate-900">{user.email}</p>
+          <p className="mt-2 text-sm font-medium text-gwfc-blue">{user.email}</p>
         </div>
 
         {/* Payment details */}

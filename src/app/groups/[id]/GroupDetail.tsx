@@ -35,7 +35,7 @@ interface Props {
 }
 
 const inputClass =
-  'w-full rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
+  'w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function tryImportContacts(): Promise<NewMember[] | null> {
@@ -285,7 +285,7 @@ export function GroupDetail({ group, members }: Props) {
               type="text"
               value={editName}
               onChange={e => setEditName(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg px-3 py-2 text-lg font-bold text-slate-900 ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+              className="min-w-0 flex-1 rounded-lg px-3 py-2 text-lg font-bold text-gwfc-blue ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
             />
             <div className="flex shrink-0 items-center gap-2">
               <button
@@ -323,11 +323,11 @@ export function GroupDetail({ group, members }: Props) {
                   const edits = memberEdits[m.id] ?? { display_name: m.display_name, phone: m.phone ?? '', email: m.email ?? '' }
                   const isExpanded = expandedMemberId === m.id
                   return (
-                    <li key={m.id} className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+                    <li key={m.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
                       {/* Collapsed row */}
                       <div className="flex items-center gap-2 px-4 py-3">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-slate-900">{edits.display_name}</p>
+                          <p className="truncate text-sm font-medium text-gwfc-blue">{edits.display_name}</p>
                           {(edits.phone || edits.email) && (
                             <p className="truncate text-xs text-slate-400">{edits.phone || edits.email}</p>
                           )}
@@ -404,9 +404,9 @@ export function GroupDetail({ group, members }: Props) {
 
                 {/* New (unsaved) members */}
                 {newMembers.map(m => (
-                  <li key={m.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                  <li key={m.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 shadow-sm ring-1 ring-slate-200">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">{m.display_name}</p>
+                      <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
                       {(m.phone || m.email) && (
                         <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
                       )}
@@ -444,7 +444,7 @@ export function GroupDetail({ group, members }: Props) {
                 <select
                   value={addDialCode}
                   onChange={e => setAddDialCode(e.target.value)}
-                  className="rounded-lg px-2 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  className="rounded-lg px-2 py-2.5 text-sm text-gwfc-blue shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   {DIAL_CODES.map(d => (
                     <option key={d.code} value={d.code}>{d.label}</option>
@@ -455,7 +455,7 @@ export function GroupDetail({ group, members }: Props) {
                   placeholder="Mobile number (optional)"
                   value={addPhone}
                   onChange={e => setAddPhone(e.target.value)}
-                  className="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  className="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <input
@@ -516,7 +516,7 @@ export function GroupDetail({ group, members }: Props) {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">{group.name}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">{group.name}</h1>
           </div>
 
           <div className="flex items-center gap-1">
@@ -582,7 +582,7 @@ export function GroupDetail({ group, members }: Props) {
                 <button
                   type="button"
                   onClick={() => toggleMember(member.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 shadow-sm ring-1 transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 shadow-sm ring-1 transition-colors ${
                     checked[member.id] ? 'bg-white ring-slate-200' : 'bg-slate-50 ring-slate-100'
                   }`}
                 >
@@ -598,7 +598,7 @@ export function GroupDetail({ group, members }: Props) {
                     )}
                   </span>
                   <div className="min-w-0 text-left">
-                    <p className={`truncate text-sm font-medium ${checked[member.id] ? 'text-slate-900' : 'text-slate-400'}`}>
+                    <p className={`truncate text-sm font-medium ${checked[member.id] ? 'text-gwfc-blue' : 'text-slate-400'}`}>
                       {member.display_name}
                     </p>
                     {(member.phone || member.email) && (
