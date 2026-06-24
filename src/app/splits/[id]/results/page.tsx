@@ -5,6 +5,7 @@ import { ShareButton } from './ShareButton'
 import { EditButton } from './EditButton'
 import { PersonCard } from './PersonCard'
 import type { PersonResult } from './PersonCard'
+import { BulkShareButton } from './BulkShareButton'
 import { PayIdBanner } from '@/components/PayIdBanner'
 
 function calculateResults(
@@ -13,7 +14,8 @@ function calculateResults(
   items: Tables<'items'>[],
   assignments: Tables<'item_assignments'>[],
   discounts: Tables<'discounts'>[],
-  discountAttendees: Tables<'discount_attendees'>[]
+  discountAttendees: Tables<'discount_attendees'>[],
+  organiserId: string
 ): PersonResult[] {
   // Count assignees per item for splitting
   const itemCount: Record<string, number> = {}
@@ -83,7 +85,7 @@ function calculateResults(
     const total = members.reduce((s, m) => Math.round((s + (acc[m.id]?.total ?? 0)) * 100) / 100, 0)
     const lines = members.flatMap(m => acc[m.id]?.lines ?? [])
     const discountLines = members.flatMap(m => acc[m.id]?.discountLines ?? [])
-    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines })
+    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines, isOrganiser: false })
   }
 
   for (const a of attendees) {
@@ -94,6 +96,7 @@ function calculateResults(
       total: acc[a.id]?.total ?? 0,
       itemLines: acc[a.id]?.lines ?? [],
       discountLines: acc[a.id]?.discountLines ?? [],
+      isOrganiser: a.user_id === organiserId,
     })
   }
 
@@ -148,7 +151,8 @@ export default async function SplitResultsPage({
     items ?? [],
     rawAssignments ?? [],
     discounts ?? [],
-    discountAttendees ?? []
+    discountAttendees ?? [],
+    user.id
   )
 
   let signedReceiptUrl: string | null = null
@@ -207,9 +211,19 @@ export default async function SplitResultsPage({
           />
         )}
 
+        {/* Bulk share CTA */}
+        {shareToken && (
+          <BulkShareButton token={shareToken} splitTitle={split.title} />
+        )}
+
         {/* Per-person results */}
         {results.map(person => (
-          <PersonCard key={person.id} person={person} />
+          <PersonCard
+            key={person.id}
+            person={person}
+            shareToken={shareToken ?? undefined}
+            splitTitle={split.title}
+          />
         ))}
       </main>
     </div>
