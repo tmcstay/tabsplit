@@ -4,19 +4,24 @@ import { useState } from 'react'
 import { SplitList } from '../SplitList'
 import type { Tables } from '@/types/database'
 
-type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
+export type SplitWithPaid = Tables<'splits'> & { attendees: { paid: boolean }[] }
 
 type Tab = 'active' | 'complete' | 'archived'
 
 interface Props {
-  splits: SplitWithCount[]
+  splits: SplitWithPaid[]
 }
 
 export function SplitsPageClient({ splits }: Props) {
   const [tab, setTab] = useState<Tab>('active')
 
-  const activeSplits = splits.filter(s => s.status === 'pending' || s.status === 'draft')
-  const completeSplits = splits.filter(s => s.status === 'finalised')
+  const allPaid = (s: SplitWithPaid) =>
+    s.attendees.length > 0 && s.attendees.every(a => a.paid)
+
+  const activeSplits = splits.filter(
+    s => s.status === 'pending' || s.status === 'draft' || (s.status === 'finalised' && !allPaid(s))
+  )
+  const completeSplits = splits.filter(s => s.status === 'finalised' && allPaid(s))
   const archivedSplits = splits.filter(s => s.status === 'archived')
 
   const tabs: { id: Tab; label: string; count: number }[] = [

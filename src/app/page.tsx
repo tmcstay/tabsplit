@@ -1,9 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { Tables } from '@/types/database'
-import { SplitList } from './SplitList'
-
-type SplitWithCount = Tables<'splits'> & { attendees: { paid: boolean }[] }
+import { SplitList, type SplitWithCount } from './SplitList'
 type OpenSplitWithItems = { id: string; items: Array<{ price: number }> | null }
 
 const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null

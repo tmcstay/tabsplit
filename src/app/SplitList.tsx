@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Tables, SplitStatus } from '@/types/database'
 import { archiveSplit, unarchiveSplit, deleteSplit } from './splits/actions'
 
-type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
+export type SplitWithCount = Tables<'splits'> & { attendees: { paid: boolean }[] }
 
 function ClientDate({ iso }: { iso: string }) {
   const [label, setLabel] = useState<string | null>(null)
@@ -204,7 +204,7 @@ function SplitItem({
     }
   }
 
-  const count = split.attendees[0]?.count ?? 0
+  const count = split.attendees.length
   const iconType = getSplitIcon(split.title)
   const gradient = getGradient(split.id)
   const isArchived = split.status === 'archived'
