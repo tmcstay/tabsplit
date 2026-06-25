@@ -490,7 +490,7 @@ export function SplitDetail({
       <>
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => router.back()} className="text-slate-400 hover:text-slate-600" aria-label="Go back">
+            <button type="button" onClick={() => router.push('/splits')} className="text-slate-400 hover:text-slate-600" aria-label="Go back">
               <BackIcon />
             </button>
             <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
@@ -555,7 +555,7 @@ export function SplitDetail({
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-3 safe-top">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <button type="button" onClick={() => router.back()} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Go back">
+            <button type="button" onClick={() => router.push('/splits')} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Go back">
               <BackIcon />
             </button>
             <h1 className="truncate text-lg font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
@@ -603,7 +603,7 @@ export function SplitDetail({
         </div>
       </header>
 
-      <main className="space-y-4 px-4 py-4 pb-28">
+      <main className="space-y-4 px-4 py-4 pb-32">
         <div className="space-y-4">
           {signedReceiptUrl && (
             <button

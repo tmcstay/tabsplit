@@ -328,7 +328,7 @@ export function GroupDetail({ group, members }: Props) {
           </div>
         </header>
 
-        <main className="flex-1 space-y-6 px-4 py-6 pb-24">
+        <main className="flex-1 space-y-6 px-4 py-6 pb-32">
           {editError && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{editError}</p>
           )}
@@ -528,7 +528,7 @@ export function GroupDetail({ group, members }: Props) {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push('/groups')}
               className="text-slate-400 hover:text-slate-600"
               aria-label="Go back"
             >
@@ -589,7 +589,7 @@ export function GroupDetail({ group, members }: Props) {
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-6">
+      <main className="flex-1 px-4 py-6 pb-40">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Members — {checkedCount} attending
         </p>
@@ -633,7 +633,7 @@ export function GroupDetail({ group, members }: Props) {
         )}
       </main>
 
-      <div className="fixed inset-x-0 bottom-16 px-4 pb-3">
+      <div className="fixed inset-x-0 px-4 pb-3" style={{ bottom: 'calc(4rem + max(env(safe-area-inset-bottom), 12px))' }}>
         <button
           type="button"
           onClick={handleAddBill}
