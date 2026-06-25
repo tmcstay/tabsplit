@@ -4,8 +4,17 @@ import { useState } from 'react'
 import Link from 'next/link'
 import type { Tables } from '@/types/database'
 import { removeFavourite, addFavourite } from '@/app/favourites/actions'
+import { ContactPicker, type Contact } from '@/components/ContactPicker'
+import { generateId } from '@/lib/uuid'
 
-type GroupWithCount = Tables<'groups'> & { group_members: [{ count: number }] | [] }
+interface GroupMember {
+  id: string
+  display_name: string
+  phone: string | null
+  email: string | null
+}
+
+export type GroupWithMembers = Tables<'groups'> & { group_members: GroupMember[] }
 type Favourite = Tables<'favourite_contacts'>
 
 const GRADIENTS = [
@@ -32,8 +41,8 @@ function GroupsIcon() {
   )
 }
 
-function GroupCard({ group }: { group: GroupWithCount }) {
-  const count = group.group_members[0]?.count ?? 0
+function GroupCard({ group }: { group: GroupWithMembers }) {
+  const count = group.group_members.length
   return (
     <Link
       href={`/groups/${group.id}`}
@@ -107,10 +116,104 @@ function FavouriteCard({ fav, onRemove }: { fav: Favourite; onRemove: (id: strin
   )
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function tryImportContacts(): Promise<Contact[] | null> {
+  try {
+    const isNative =
+      typeof window !== 'undefined' &&
+      (window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) return null
+    const { Contacts } = await import('@capacitor-community/contacts' as any)
+    const { contacts: permission } = await Contacts.requestPermissions()
+    if (permission !== 'granted') return null
+    const { contacts } = await Contacts.getContacts({
+      projection: { name: true, phones: true, emails: true },
+    })
+    return contacts
+      .filter((c: any) => c.name?.display)
+      .map((c: any) => ({
+        id: generateId(),
+        display_name: c.name.display as string,
+        phone: c.phones?.[0]?.number ?? null,
+        email: c.emails?.[0]?.address ?? null,
+      }))
+  } catch {
+    return null
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// Group member picker sheet
+function GroupPicker({
+  groups,
+  existingNames,
+  onSelectGroup,
+  onClose,
+}: {
+  groups: GroupWithMembers[]
+  existingNames: Set<string>
+  onSelectGroup: (members: Contact[]) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative flex max-h-[75vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+        <div className="shrink-0 border-b border-slate-100 px-4 pt-4 pb-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gwfc-blue">Add from group</p>
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">Tap a group to add all its members to favourites</p>
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {groups.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-slate-400">No saved groups.</p>
+          ) : groups.map(group => {
+            const newMembers = group.group_members.filter(
+              m => !existingNames.has(m.display_name.toLowerCase().trim())
+            )
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onSelectGroup(group.group_members.map(m => ({ id: m.id, display_name: m.display_name, phone: m.phone, email: m.email })))}
+                className="flex w-full items-center gap-3 px-4 py-3.5 hover:bg-slate-50 active:bg-slate-100 text-left"
+              >
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{ background: getGradient(group.id) }}
+                >
+                  <GroupsIcon />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gwfc-blue">{group.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {group.group_members.length} {group.group_members.length === 1 ? 'member' : 'members'}
+                    {newMembers.length < group.group_members.length && ` · ${group.group_members.length - newMembers.length} already saved`}
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                  stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const inputCls = 'w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
 
 interface Props {
-  groups: GroupWithCount[]
+  groups: GroupWithMembers[]
   favourites: Favourite[]
 }
 
@@ -123,6 +226,14 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
   const [newPhone, setNewPhone] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [adding, setAdding] = useState(false)
+
+  // Contacts / group picker
+  const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
+  const [showPicker, setShowPicker] = useState(false)
+  const [showGroupPicker, setShowGroupPicker] = useState(false)
+  const [contactsMessage, setContactsMessage] = useState<string | null>(null)
+
+  const existingFavNames = new Set(favs.map(f => f.display_name.toLowerCase().trim()))
 
   function handleRemoveFav(id: string) {
     setFavs(prev => prev.filter(f => f.id !== id))
@@ -155,6 +266,51 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
       setFavs(prev => prev.filter(f => f.id !== tempId))
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleImportContacts() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = !!(window as any).Capacitor?.isNativePlatform?.()
+    if (!isNative) {
+      setContactsMessage('Contact import is only available in the native app.')
+      setTimeout(() => setContactsMessage(null), 3000)
+      return
+    }
+    const contacts = await tryImportContacts()
+    if (contacts === null) return
+    setPickerContacts(contacts)
+    setShowPicker(true)
+  }
+
+  function handleGroupSelect(members: Contact[]) {
+    setShowGroupPicker(false)
+    setPickerContacts(members)
+    setShowPicker(true)
+  }
+
+  async function handlePickerAdd(selected: Contact[]) {
+    setShowPicker(false)
+    setPickerContacts([])
+    for (const contact of selected) {
+      const key = contact.display_name.toLowerCase().trim()
+      if (existingFavNames.has(key)) continue
+      const tempId = `temp-${key}-${Date.now()}`
+      const optimistic: Favourite = {
+        id: tempId,
+        user_id: '',
+        display_name: contact.display_name,
+        phone: contact.phone,
+        email: contact.email,
+        created_at: new Date().toISOString(),
+      }
+      setFavs(prev => [...prev, optimistic])
+      try {
+        const realId = await addFavourite(contact.display_name, contact.phone, contact.email)
+        setFavs(prev => prev.map(f => f.id === tempId ? { ...f, id: realId } : f))
+      } catch {
+        setFavs(prev => prev.filter(f => f.id !== tempId))
+      }
     }
   }
 
@@ -225,9 +381,45 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
             </div>
           )}
 
-          {/* Add favourite form */}
+          {/* Import buttons */}
+          <div className="mb-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleImportContacts}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 active:bg-indigo-100"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              From contacts
+            </button>
+            {groups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowGroupPicker(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-50 px-3 py-2.5 text-xs font-semibold text-teal-600 hover:bg-teal-100 active:bg-teal-100"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="7" r="3" />
+                  <path d="M2 19c0-3 2.7-5 7-5" />
+                  <circle cx="17" cy="9" r="2.5" />
+                  <path d="M22 19c0-2.2-1.8-4-5-4" />
+                </svg>
+                From group
+              </button>
+            )}
+          </div>
+
+          {contactsMessage && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{contactsMessage}</p>
+          )}
+
+          {/* Manual add form */}
           <form onSubmit={handleAddFav} className="space-y-2.5 rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add favourite</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add manually</p>
             <input
               type="text"
               placeholder="Name"
@@ -258,6 +450,26 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
             </button>
           </form>
         </>
+      )}
+
+      {/* Contact picker */}
+      {showPicker && (
+        <ContactPicker
+          contacts={pickerContacts}
+          existingNames={existingFavNames}
+          onAdd={handlePickerAdd}
+          onClose={() => { setShowPicker(false); setPickerContacts([]) }}
+        />
+      )}
+
+      {/* Group picker */}
+      {showGroupPicker && (
+        <GroupPicker
+          groups={groups}
+          existingNames={existingFavNames}
+          onSelectGroup={handleGroupSelect}
+          onClose={() => setShowGroupPicker(false)}
+        />
       )}
     </main>
   )

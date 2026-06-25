@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
-import { GroupsPageClient } from './GroupsPageClient'
-
-type GroupWithCount = Tables<'groups'> & { group_members: [{ count: number }] | [] }
+import { GroupsPageClient, type GroupWithMembers } from './GroupsPageClient'
 
 export default async function GroupsPage() {
   const supabase = await createClient()
@@ -13,7 +11,7 @@ export default async function GroupsPage() {
   const [{ data: groups }, { data: favourites }] = await Promise.all([
     supabase
       .from('groups')
-      .select('*, group_members(count)')
+      .select('*, group_members(id, display_name, phone, email)')
       .eq('organiser_id', user.id)
       .eq('saved', true)
       .order('name'),
@@ -30,7 +28,7 @@ export default async function GroupsPage() {
         <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">Groups</h1>
       </header>
       <GroupsPageClient
-        groups={(groups ?? []) as unknown as GroupWithCount[]}
+        groups={(groups ?? []) as unknown as GroupWithMembers[]}
         favourites={favourites ?? []}
       />
     </div>
