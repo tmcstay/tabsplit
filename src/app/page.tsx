@@ -20,12 +20,18 @@ export default async function HomePage() {
       .from('splits')
       .select('*, attendees(paid)')
       .eq('organiser_id', user.id)
-      .in('status', ['pending', 'draft'])
+      .in('status', ['pending', 'draft', 'finalised'])
       .order('created_at', { ascending: false }),
   ])
 
   const openSplits = (openSplitsRaw ?? []) as unknown as OpenSplitWithItems[]
   const openCount = openSplits.length
+
+  const allSplits = (splits ?? []) as unknown as SplitWithCount[]
+  const activeSplits = allSplits.filter(
+    s => s.status === 'pending' || s.status === 'draft' ||
+      (s.status === 'finalised' && !(s.attendees.length > 0 && s.attendees.every(a => a.paid)))
+  )
   const owedTotal = openSplits.reduce((total, s) => {
     return total + (s.items ?? []).reduce((sum, item) => sum + Number(item.price), 0)
   }, 0)
@@ -79,7 +85,7 @@ export default async function HomePage() {
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent Splits
           </h2>
-          <SplitList initialSplits={(splits ?? []) as unknown as SplitWithCount[]} />
+          <SplitList initialSplits={activeSplits} />
         </section>
       </main>
     </div>
