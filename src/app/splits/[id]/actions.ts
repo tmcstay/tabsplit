@@ -55,7 +55,9 @@ export async function assignItem(
 export async function mergeAttendees(
   splitId: string,
   attendeeIds: string[],
-  label: string
+  label: string,
+  phone: string | null,
+  email: string | null,
 ): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,7 +65,7 @@ export async function mergeAttendees(
 
   const { data: group, error: groupErr } = await supabase
     .from('attendee_groups')
-    .insert({ split_id: splitId, label })
+    .insert({ split_id: splitId, label, phone, email })
     .select()
     .single()
 

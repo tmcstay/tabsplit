@@ -105,6 +105,7 @@ export function SplitDetail({
   const [mergeSelected, setMergeSelected] = useState<string[]>([])
   const [mergeLabel, setMergeLabel] = useState('')
   const [mergeLabelEdited, setMergeLabelEdited] = useState(false)
+  const [mergeContactId, setMergeContactId] = useState<string | null>(null)
   const [showEditAttendees, setShowEditAttendees] = useState(false)
   const [editAttendeeId, setEditAttendeeId] = useState<string | null>(null)
   const [editAttendeeName, setEditAttendeeName] = useState('')
@@ -368,11 +369,18 @@ export function SplitDetail({
   }
 
   function toggleMergeSelect(id: string) {
-    setMergeSelected(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-      if (!mergeLabelEdited) setMergeLabel(defaultMergeLabel(next))
-      return next
-    })
+    const next = mergeSelected.includes(id)
+      ? mergeSelected.filter(x => x !== id)
+      : [...mergeSelected, id]
+    setMergeSelected(next)
+    if (!mergeLabelEdited) setMergeLabel(defaultMergeLabel(next))
+    // Keep contact nomination valid — auto-pick first eligible if current is no longer selected
+    const eligible = next
+      .map(mid => attendees.find(a => a.id === mid))
+      .filter((a): a is typeof attendees[number] => !!a && !!(a.phone || a.email))
+    if (!eligible.find(a => a.id === mergeContactId)) {
+      setMergeContactId(eligible[0]?.id ?? null)
+    }
   }
 
   async function handleConfirmMerge() {
@@ -380,10 +388,18 @@ export function SplitDetail({
     setBusy(true)
     setError(null)
     try {
-      await mergeAttendees(split.id, mergeSelected, mergeLabel.trim())
+      const contactAttendee = attendees.find(a => a.id === mergeContactId)
+      await mergeAttendees(
+        split.id,
+        mergeSelected,
+        mergeLabel.trim(),
+        contactAttendee?.phone ?? null,
+        contactAttendee?.email ?? null,
+      )
       setShowMerge(false)
       setMergeSelected([])
       setMergeLabel('')
+      setMergeContactId(null)
       setMergeLabelEdited(false)
       router.refresh()
     } catch {
@@ -1147,6 +1163,38 @@ export function SplitDetail({
                 onChange={e => { setMergeLabel(e.target.value); setMergeLabelEdited(true) }}
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
               />
+              {/* Contact nomination — only shown when 2+ selected and multiple have contact info */}
+              {(() => {
+                const eligible = mergeSelected
+                  .map(mid => attendees.find(a => a.id === mid))
+                  .filter((a): a is typeof attendees[number] => !!a && !!(a.phone || a.email))
+                if (eligible.length < 2) return null
+                return (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-slate-500">Send group messages to</p>
+                    <div className="space-y-1">
+                      {eligible.map(a => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setMergeContactId(a.id)}
+                          className="flex w-full items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-50"
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                            mergeContactId === a.id ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'
+                          }`}>
+                            {mergeContactId === a.id && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </span>
+                          <div className="min-w-0 text-left">
+                            <span className="text-sm text-gwfc-blue">{a.display_name}</span>
+                            <span className="ml-2 text-xs text-slate-400">{a.phone ?? a.email}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
               <button
                 type="button"
                 onClick={handleConfirmMerge}

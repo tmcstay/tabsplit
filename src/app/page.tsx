@@ -18,7 +18,7 @@ export default async function HomePage() {
       .from('splits')
       .select('id, items(price)')
       .eq('organiser_id', user.id)
-      .in('status', ['pending', 'draft']),
+      .in('status', ['pending', 'draft', 'finalised']),
     supabase
       .from('splits')
       .select('*, attendees(count)')

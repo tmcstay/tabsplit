@@ -160,15 +160,36 @@ export default async function SplitResultsPage({
 
   const results = calculateResults(acc, attendees ?? [], attendeeGroups ?? [])
 
-  const modalAttendees: ModalAttendee[] = (attendees ?? [])
-    .filter(a => a.user_id !== user.id)
-    .map(a => ({
-      id: a.id,
-      display_name: a.display_name,
-      phone: a.phone ?? null,
-      email: a.email ?? null,
-      total: acc[a.id]?.total ?? 0,
-    }))
+  const groupedAttendeeIds = new Set(
+    (attendeeGroups ?? []).flatMap(g =>
+      (attendees ?? []).filter(a => a.group_id === g.id).map(a => a.id)
+    )
+  )
+  const modalAttendees: ModalAttendee[] = [
+    ...(attendeeGroups ?? []).map(g => {
+      const members = (attendees ?? []).filter(a => a.group_id === g.id)
+      const total = members.reduce(
+        (s, m) => Math.round((s + (acc[m.id]?.total ?? 0)) * 100) / 100,
+        0
+      )
+      return {
+        id: g.id,
+        display_name: g.label,
+        phone: g.phone ?? null,
+        email: g.email ?? null,
+        total,
+      }
+    }),
+    ...(attendees ?? [])
+      .filter(a => a.user_id !== user.id && !groupedAttendeeIds.has(a.id))
+      .map(a => ({
+        id: a.id,
+        display_name: a.display_name,
+        phone: a.phone ?? null,
+        email: a.email ?? null,
+        total: acc[a.id]?.total ?? 0,
+      })),
+  ]
 
   let signedReceiptUrl: string | null = null
   if (split.receipt_url) {
