@@ -196,6 +196,37 @@ export async function updateAttendee(
   if (error) throw new Error('Failed to update attendee.')
 }
 
+export async function markPaid(
+  splitId: string,
+  entityId: string,
+  paid: boolean,
+  isGroup: boolean,
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  if (isGroup) {
+    const { data: members } = await supabase
+      .from('attendees')
+      .select('id')
+      .eq('split_id', splitId)
+      .eq('group_id', entityId)
+    if (members?.length) {
+      await supabase
+        .from('attendees')
+        .update({ paid })
+        .in('id', members.map(m => m.id))
+    }
+  } else {
+    await supabase
+      .from('attendees')
+      .update({ paid })
+      .eq('id', entityId)
+      .eq('split_id', splitId)
+  }
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

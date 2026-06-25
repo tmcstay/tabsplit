@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { ShareButton } from './ShareButton'
 import { EditButton } from './EditButton'
-import { PersonCard } from './PersonCard'
+import { ResultsList } from './ResultsList'
 import type { PersonResult } from './PersonCard'
 import { ShareWithEveryone } from './ShareWithEveryone'
 import type { ModalAttendee } from './ShareWithEveryone'
@@ -91,7 +91,11 @@ function calculateResults(
     const total = members.reduce((s, m) => Math.round((s + (acc[m.id]?.total ?? 0)) * 100) / 100, 0)
     const lines = members.flatMap(m => acc[m.id]?.lines ?? [])
     const discountLines = members.flatMap(m => acc[m.id]?.discountLines ?? [])
-    results.push({ id: g.id, label: g.label, total, itemLines: lines, discountLines })
+    const paid = members.length > 0 && members.every(m => m.paid)
+    results.push({
+      id: g.id, label: g.label, total, itemLines: lines, discountLines,
+      paid, isGroup: true, phone: g.phone ?? null, email: g.email ?? null,
+    })
   }
 
   for (const a of attendees) {
@@ -102,6 +106,10 @@ function calculateResults(
       total: acc[a.id]?.total ?? 0,
       itemLines: acc[a.id]?.lines ?? [],
       discountLines: acc[a.id]?.discountLines ?? [],
+      paid: a.paid,
+      isGroup: false,
+      phone: a.phone ?? null,
+      email: a.email ?? null,
     })
   }
 
@@ -252,9 +260,12 @@ export default async function SplitResultsPage({
         )}
 
         {/* Per-person results */}
-        {results.map(person => (
-          <PersonCard key={person.id} person={person} />
-        ))}
+        <ResultsList
+          results={results}
+          splitId={id}
+          splitTitle={split.title}
+          shareUrl={shareToken ? `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://tabsplit-three.vercel.app'}/share/${shareToken}` : null}
+        />
 
         {/* Receipt at the bottom — collapsed by default */}
         {signedReceiptUrl && (

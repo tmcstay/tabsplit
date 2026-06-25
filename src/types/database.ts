@@ -167,6 +167,7 @@ export interface Database {
           phone: string | null
           email: string | null
           group_id: string | null
+          paid: boolean
           created_at: string
         }
         Insert: {
@@ -177,6 +178,7 @@ export interface Database {
           phone?: string | null
           email?: string | null
           group_id?: string | null
+          paid?: boolean
           created_at?: string
         }
         Update: {
@@ -187,6 +189,7 @@ export interface Database {
           phone?: string | null
           email?: string | null
           group_id?: string | null
+          paid?: boolean
           created_at?: string
         }
         Relationships: []
