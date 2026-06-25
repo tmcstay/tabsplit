@@ -30,6 +30,12 @@ interface MemberEdit {
   email: string
 }
 
+interface MergeGroup {
+  id: string
+  label: string
+  memberIds: string[]
+}
+
 interface Props {
   group: Tables<'groups'>
   members: Tables<'group_members'>[]
@@ -95,6 +101,13 @@ export function GroupDetail({ group, members }: Props) {
   const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
   const [showPicker, setShowPicker] = useState(false)
 
+  // Merge groups
+  const [mergeGroups, setMergeGroups] = useState<MergeGroup[]>([])
+  const [showMergeSheet, setShowMergeSheet] = useState(false)
+  const [mergeSheetSelected, setMergeSheetSelected] = useState<string[]>([])
+  const [mergeSheetLabel, setMergeSheetLabel] = useState('')
+  const [mergeSheetLabelEdited, setMergeSheetLabelEdited] = useState(false)
+
   // Sync local state when server refreshes props
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -124,6 +137,49 @@ export function GroupDetail({ group, members }: Props) {
     router.push('/')
   }
 
+  function defaultMergeLabel(ids: string[]): string {
+    const all: { id: string; display_name: string }[] = [...localMembers, ...newMembers]
+    const names = ids
+      .map(id => all.find(m => m.id === id)?.display_name ?? '')
+      .filter(Boolean)
+      .map(n => n.split(' ')[0])
+    if (names.length === 0) return ''
+    if (names.length === 2) return `${names[0]} & ${names[1]}`
+    return names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1]
+  }
+
+  function toggleMergeSheetSelect(id: string) {
+    setMergeSheetSelected(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      if (!mergeSheetLabelEdited) setMergeSheetLabel(defaultMergeLabel(next))
+      return next
+    })
+  }
+
+  function handleConfirmMergeSheet() {
+    if (mergeSheetSelected.length < 2) return
+    const newId = generateId()
+    const label = mergeSheetLabel.trim() || defaultMergeLabel(mergeSheetSelected)
+    setMergeGroups(prev => {
+      const filtered = prev
+        .map(g => ({ ...g, memberIds: g.memberIds.filter(id => !mergeSheetSelected.includes(id)) }))
+        .filter(g => g.memberIds.length >= 2)
+      return [...filtered, { id: newId, label, memberIds: mergeSheetSelected }]
+    })
+    setMergeSheetSelected([])
+    setMergeSheetLabel('')
+    setMergeSheetLabelEdited(false)
+    setShowMergeSheet(false)
+  }
+
+  function removeMergeGroup(groupId: string) {
+    setMergeGroups(prev => prev.filter(g => g.id !== groupId))
+  }
+
+  function getMergeGroupForMember(memberId: string): MergeGroup | undefined {
+    return mergeGroups.find(g => g.memberIds.includes(memberId))
+  }
+
   function enterEditMode() {
     setEditName(group.name)
     setLocalMembers(members)
@@ -145,6 +201,23 @@ export function GroupDetail({ group, members }: Props) {
     setAddError(null)
     setEditError(null)
     setMenuOpen(false)
+
+    // Initialise merge groups from existing member data
+    const existingMergeMap: Record<string, { label: string; memberIds: string[] }> = {}
+    for (const m of members) {
+      if (m.merge_group_id) {
+        if (!existingMergeMap[m.merge_group_id]) {
+          existingMergeMap[m.merge_group_id] = { label: m.merge_label ?? '', memberIds: [] }
+        }
+        existingMergeMap[m.merge_group_id].memberIds.push(m.id)
+      }
+    }
+    setMergeGroups(
+      Object.entries(existingMergeMap)
+        .filter(([, v]) => v.memberIds.length >= 2)
+        .map(([id, v]) => ({ id, ...v }))
+    )
+
     setEditMode(true)
   }
 
@@ -164,10 +237,20 @@ export function GroupDetail({ group, members }: Props) {
     setLocalMembers(prev => prev.filter(m => m.id !== id))
     setRemovedIds(prev => new Set([...prev, id]))
     if (expandedMemberId === id) setExpandedMemberId(null)
+    setMergeGroups(prev =>
+      prev
+        .map(g => ({ ...g, memberIds: g.memberIds.filter(mid => mid !== id) }))
+        .filter(g => g.memberIds.length >= 2)
+    )
   }
 
   function removeNewMember(id: string) {
     setNewMembers(prev => prev.filter(m => m.id !== id))
+    setMergeGroups(prev =>
+      prev
+        .map(g => ({ ...g, memberIds: g.memberIds.filter(mid => mid !== id) }))
+        .filter(g => g.memberIds.length >= 2)
+    )
   }
 
   function addNewMember(e: React.FormEvent) {
@@ -237,13 +320,19 @@ export function GroupDetail({ group, members }: Props) {
         const nameChanged = edits.display_name.trim() !== orig.display_name
         const phoneChanged = (edits.phone.trim() || null) !== orig.phone
         const emailChanged = (edits.email.trim() || null) !== orig.email
-        if (nameChanged || phoneChanged || emailChanged) {
+        const mergeGroup = getMergeGroupForMember(m.id)
+        const newMergeGroupId = mergeGroup?.id ?? null
+        const newMergeLabel = mergeGroup?.label ?? null
+        const mergeChanged = newMergeGroupId !== (orig.merge_group_id ?? null) || newMergeLabel !== (orig.merge_label ?? null)
+        if (nameChanged || phoneChanged || emailChanged || mergeChanged) {
           const { error } = await supabase
             .from('group_members')
             .update({
               display_name: edits.display_name.trim() || orig.display_name,
               phone: edits.phone.trim() || null,
               email: edits.email.trim() || null,
+              merge_group_id: newMergeGroupId,
+              merge_label: newMergeLabel,
             })
             .eq('id', m.id)
           if (error) throw new Error(`Failed to update ${orig.display_name}.`)
@@ -262,12 +351,17 @@ export function GroupDetail({ group, members }: Props) {
       // Insert new members
       if (newMembers.length > 0) {
         const { error } = await supabase.from('group_members').insert(
-          newMembers.map(m => ({
-            group_id: group.id,
-            display_name: m.display_name,
-            phone: m.phone,
-            email: m.email,
-          }))
+          newMembers.map(m => {
+            const mergeGroup = getMergeGroupForMember(m.id)
+            return {
+              group_id: group.id,
+              display_name: m.display_name,
+              phone: m.phone,
+              email: m.email,
+              merge_group_id: mergeGroup?.id ?? null,
+              merge_label: mergeGroup?.label ?? null,
+            }
+          })
         )
         if (error) throw new Error('Failed to add new members.')
       }
@@ -287,6 +381,10 @@ export function GroupDetail({ group, members }: Props) {
   // ── Edit mode ──────────────────────────────────────────────────────────────
 
   if (editMode) {
+    const alreadyMergedIds = new Set(mergeGroups.flatMap(g => g.memberIds))
+    const allEditMembers: { id: string; display_name: string }[] = [...localMembers, ...newMembers]
+    const availableForMerge = allEditMembers.filter(m => !alreadyMergedIds.has(m.id))
+
     return (
       <>
         {showPicker && (
@@ -300,6 +398,67 @@ export function GroupDetail({ group, members }: Props) {
             onClose={() => { setShowPicker(false); setPickerContacts([]) }}
           />
         )}
+
+        {/* Merge bottom sheet */}
+        {showMergeSheet && (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <div className="fixed inset-0 bg-black/40" onClick={() => { setShowMergeSheet(false); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }} />
+            <div className="relative flex max-h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+              <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center justify-between">
+                <p className="text-sm font-semibold text-gwfc-blue">Merge members</p>
+                <button type="button" onClick={() => { setShowMergeSheet(false); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {availableForMerge.map(m => {
+                  const selected = mergeSheetSelected.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleMergeSheetSelect(m.id)}
+                      className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100"
+                    >
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${selected ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'}`}>
+                        {selected && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                            <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-sm font-medium text-gwfc-blue">{m.display_name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {mergeSheetSelected.length >= 2 && (
+                <div className="shrink-0 border-t border-slate-100 px-4 py-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Merge label</label>
+                    <input
+                      type="text"
+                      value={mergeSheetLabel}
+                      onChange={e => { setMergeSheetLabel(e.target.value); setMergeSheetLabelEdited(true) }}
+                      placeholder="e.g. Alice & Bob"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConfirmMergeSheet}
+                    className="w-full rounded-2xl bg-gwfc-blue py-3.5 text-sm font-semibold text-white"
+                  >
+                    Merge {mergeSheetSelected.length} members
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
           <div className="flex items-center gap-3">
             <input
@@ -343,15 +502,17 @@ export function GroupDetail({ group, members }: Props) {
                 {localMembers.map(m => {
                   const edits = memberEdits[m.id] ?? { display_name: m.display_name, phone: m.phone ?? '', email: m.email ?? '' }
                   const isExpanded = expandedMemberId === m.id
+                  const mergeGroup = getMergeGroupForMember(m.id)
                   return (
                     <li key={m.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-                      {/* Collapsed row */}
                       <div className="flex items-center gap-2 px-4 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gwfc-blue">{edits.display_name}</p>
-                          {(edits.phone || edits.email) && (
+                          {mergeGroup ? (
+                            <p className="text-xs text-teal-600">{mergeGroup.label}</p>
+                          ) : (edits.phone || edits.email) ? (
                             <p className="truncate text-xs text-slate-400">{edits.phone || edits.email}</p>
-                          )}
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -378,7 +539,6 @@ export function GroupDetail({ group, members }: Props) {
                         </button>
                       </div>
 
-                      {/* Expanded edit form */}
                       {isExpanded && (
                         <div className="space-y-2.5 border-t border-slate-100 px-4 pb-4 pt-3">
                           <div>
@@ -424,31 +584,77 @@ export function GroupDetail({ group, members }: Props) {
                 })}
 
                 {/* New (unsaved) members */}
-                {newMembers.map(m => (
-                  <li key={m.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 shadow-sm ring-1 ring-slate-200">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
-                      {(m.phone || m.email) && (
-                        <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
-                      )}
-                      <p className="text-xs italic text-slate-400">New</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeNewMember(m.id)}
-                      className="ml-3 shrink-0 text-slate-400 hover:text-red-500"
-                      aria-label={`Remove ${m.display_name}`}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-                        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
+                {newMembers.map(m => {
+                  const mergeGroup = getMergeGroupForMember(m.id)
+                  return (
+                    <li key={m.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
+                        {mergeGroup ? (
+                          <p className="text-xs text-teal-600">{mergeGroup.label}</p>
+                        ) : (m.phone || m.email) ? (
+                          <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
+                        ) : null}
+                        <p className="text-xs italic text-slate-400">New</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeNewMember(m.id)}
+                        className="ml-3 shrink-0 text-slate-400 hover:text-red-500"
+                        aria-label={`Remove ${m.display_name}`}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                          stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
+
+          {/* Merge section */}
+          {(mergeGroups.length > 0 || availableForMerge.length >= 2) && (
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Merges</p>
+              {mergeGroups.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {mergeGroups.map(g => (
+                    <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 ring-1 ring-teal-200">
+                      {g.label}
+                      <button
+                        type="button"
+                        onClick={() => removeMergeGroup(g.id)}
+                        className="ml-0.5 text-teal-500 hover:text-teal-800"
+                        aria-label={`Remove merge ${g.label}`}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {availableForMerge.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => { setShowMergeSheet(true); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }}
+                  className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <path d="M8.59 13.51l4.83 2.98M13.41 7.51L8.59 10.49" />
+                  </svg>
+                  Merge members
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Add member form */}
           <div>
@@ -520,6 +726,15 @@ export function GroupDetail({ group, members }: Props) {
   }
 
   // ── View mode ──────────────────────────────────────────────────────────────
+
+  // Group members by merge_group_id for display
+  const viewMergeMap: Record<string, Tables<'group_members'>[]> = {}
+  for (const m of members) {
+    if (m.merge_group_id) {
+      if (!viewMergeMap[m.merge_group_id]) viewMergeMap[m.merge_group_id] = []
+      viewMergeMap[m.merge_group_id].push(m)
+    }
+  }
 
   return (
     <>
@@ -622,9 +837,11 @@ export function GroupDetail({ group, members }: Props) {
                     <p className={`truncate text-sm font-medium ${checked[member.id] ? 'text-gwfc-blue' : 'text-slate-400'}`}>
                       {member.display_name}
                     </p>
-                    {(member.phone || member.email) && (
+                    {member.merge_group_id && member.merge_label ? (
+                      <p className="text-xs text-teal-600">{member.merge_label}</p>
+                    ) : (member.phone || member.email) ? (
                       <p className="truncate text-xs text-slate-400">{member.phone ?? member.email}</p>
-                    )}
+                    ) : null}
                   </div>
                 </button>
               </li>

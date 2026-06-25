@@ -14,7 +14,7 @@ export default async function NewSplitPage({
   const { group: groupId, members: membersParam } = await searchParams
 
   let groupName: string | null = null
-  let initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null }[] = []
+  let initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[] = []
 
   if (groupId) {
     const memberIds = membersParam?.split(',').filter(Boolean) ?? []
@@ -24,12 +24,12 @@ export default async function NewSplitPage({
       memberIds.length > 0
         ? supabase
             .from('group_members')
-            .select('id, display_name, phone, email')
+            .select('id, display_name, phone, email, merge_group_id, merge_label')
             .eq('group_id', groupId)
             .in('id', memberIds)
         : supabase
             .from('group_members')
-            .select('id, display_name, phone, email')
+            .select('id, display_name, phone, email, merge_group_id, merge_label')
             .eq('group_id', groupId),
     ])
 
@@ -39,6 +39,8 @@ export default async function NewSplitPage({
       display_name: m.display_name,
       phone: m.phone ?? null,
       email: m.email ?? null,
+      mergeGroupId: m.merge_group_id ?? null,
+      mergeLabel: m.merge_label ?? null,
     }))
   }
 

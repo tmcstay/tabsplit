@@ -11,13 +11,15 @@ interface Attendee {
   display_name: string
   phone: string | null
   email: string | null
+  mergeGroupId: string | null
+  mergeLabel: string | null
 }
 
 interface Props {
   userId: string
   groupId: string | null
   groupName: string | null
-  initialAttendees: Attendee[]
+  initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[]
 }
 
 type Step = 1 | 2 | 3
@@ -69,7 +71,9 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   const [step, setStep] = useState<Step>(1)
   const [title, setTitle] = useState('')
-  const [attendees, setAttendees] = useState<Attendee[]>(initialAttendees)
+  const [attendees, setAttendees] = useState<Attendee[]>(
+    initialAttendees.map(a => ({ ...a }))
+  )
   const [newName, setNewName] = useState('')
   const [newPhone, setNewPhone] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -91,6 +95,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         display_name: newName.trim(),
         phone: newPhone.trim() || null,
         email: newEmail.trim() || null,
+        mergeGroupId: null,
+        mergeLabel: null,
       },
     ])
     setNewName('')
@@ -119,7 +125,12 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   function handlePickerAdd(selected: Contact[]) {
     setAttendees(prev => {
       const existing = new Set(prev.map(a => a.display_name))
-      return [...prev, ...selected.filter(c => !existing.has(c.display_name))]
+      return [
+        ...prev,
+        ...selected
+          .filter(c => !existing.has(c.display_name))
+          .map(c => ({ ...c, mergeGroupId: null, mergeLabel: null })),
+      ]
     })
     setShowPicker(false)
     setPickerContacts([])
@@ -145,7 +156,7 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       fd.append('title', title)
       fd.append('groupId', groupId ?? '')
       fd.append('attendees', JSON.stringify(
-        attendees.map(a => ({ display_name: a.display_name, phone: a.phone, email: a.email }))
+        attendees.map(a => ({ display_name: a.display_name, phone: a.phone, email: a.email, mergeGroupId: a.mergeGroupId, mergeLabel: a.mergeLabel }))
       ))
       if (receipt) fd.append('receipt', receipt)
 

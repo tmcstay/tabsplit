@@ -86,6 +86,12 @@ async function tryImportContacts(): Promise<Member[] | null> {
 const inputClass =
   'w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
 
+interface MergeGroup {
+  id: string
+  label: string
+  memberIds: string[]
+}
+
 export function NewGroupForm({ userId }: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -106,6 +112,13 @@ export function NewGroupForm({ userId }: Props) {
   const [groupsLoaded, setGroupsLoaded] = useState(false)
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set())
+
+  // Merge groups
+  const [mergeGroups, setMergeGroups] = useState<MergeGroup[]>([])
+  const [showMergeSheet, setShowMergeSheet] = useState(false)
+  const [mergeSheetSelected, setMergeSheetSelected] = useState<string[]>([])
+  const [mergeSheetLabel, setMergeSheetLabel] = useState('')
+  const [mergeSheetLabelEdited, setMergeSheetLabelEdited] = useState(false)
 
   // Step 3
   const [saved, setSaved] = useState(false)
@@ -157,6 +170,49 @@ export function NewGroupForm({ userId }: Props) {
       }
       return prev.filter(m => m.id !== id)
     })
+    setMergeGroups(prev =>
+      prev
+        .map(g => ({ ...g, memberIds: g.memberIds.filter(mid => mid !== id) }))
+        .filter(g => g.memberIds.length >= 2)
+    )
+  }
+
+  function defaultMergeLabel(ids: string[]): string {
+    const names = ids
+      .map(id => members.find(m => m.id === id)?.display_name ?? '')
+      .filter(Boolean)
+      .map(n => n.split(' ')[0])
+    if (names.length === 0) return ''
+    if (names.length === 2) return `${names[0]} & ${names[1]}`
+    return names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1]
+  }
+
+  function toggleMergeSheetSelect(id: string) {
+    setMergeSheetSelected(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      if (!mergeSheetLabelEdited) setMergeSheetLabel(defaultMergeLabel(next))
+      return next
+    })
+  }
+
+  function handleConfirmMergeSheet() {
+    if (mergeSheetSelected.length < 2) return
+    const newId = generateId()
+    const label = mergeSheetLabel.trim() || defaultMergeLabel(mergeSheetSelected)
+    setMergeGroups(prev => {
+      const filtered = prev
+        .map(g => ({ ...g, memberIds: g.memberIds.filter(id => !mergeSheetSelected.includes(id)) }))
+        .filter(g => g.memberIds.length >= 2)
+      return [...filtered, { id: newId, label, memberIds: mergeSheetSelected }]
+    })
+    setMergeSheetSelected([])
+    setMergeSheetLabel('')
+    setMergeSheetLabelEdited(false)
+    setShowMergeSheet(false)
+  }
+
+  function removeMergeGroup(groupId: string) {
+    setMergeGroups(prev => prev.filter(g => g.id !== groupId))
   }
 
   function toggleImport(gm: SavedGroupMember) {
@@ -232,12 +288,17 @@ export function NewGroupForm({ userId }: Props) {
 
     if (members.length > 0) {
       const { error: membersErr } = await supabase.from('group_members').insert(
-        members.map(m => ({
-          group_id: group.id,
-          display_name: m.display_name,
-          phone: m.phone ?? null,
-          email: m.email ?? null,
-        }))
+        members.map(m => {
+          const mergeGroup = mergeGroups.find(g => g.memberIds.includes(m.id))
+          return {
+            group_id: group.id,
+            display_name: m.display_name,
+            phone: m.phone ?? null,
+            email: m.email ?? null,
+            merge_group_id: mergeGroup?.id ?? null,
+            merge_label: mergeGroup?.label ?? null,
+          }
+        })
       )
       if (membersErr) {
         setError('Group created but some members could not be saved.')
@@ -290,6 +351,9 @@ export function NewGroupForm({ userId }: Props) {
   // ── Step 2: Add members ──────────────────────────────────────────────────────
 
   if (step === 2) {
+    const alreadyMergedIds = new Set(mergeGroups.flatMap(g => g.memberIds))
+    const availableForMerge = members.filter(m => !alreadyMergedIds.has(m.id))
+
     return (
       <div className="space-y-6">
         {showPicker && (
@@ -299,6 +363,66 @@ export function NewGroupForm({ userId }: Props) {
             onAdd={handlePickerAdd}
             onClose={() => { setShowPicker(false); setPickerContacts([]) }}
           />
+        )}
+
+        {/* Merge bottom sheet */}
+        {showMergeSheet && (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <div className="fixed inset-0 bg-black/40" onClick={() => { setShowMergeSheet(false); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }} />
+            <div className="relative flex max-h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
+              <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center justify-between">
+                <p className="text-sm font-semibold text-gwfc-blue">Merge members</p>
+                <button type="button" onClick={() => { setShowMergeSheet(false); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {availableForMerge.map(m => {
+                  const selected = mergeSheetSelected.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleMergeSheetSelect(m.id)}
+                      className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100"
+                    >
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${selected ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'}`}>
+                        {selected && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                            <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-sm font-medium text-gwfc-blue">{m.display_name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {mergeSheetSelected.length >= 2 && (
+                <div className="shrink-0 border-t border-slate-100 px-4 py-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Merge label</label>
+                    <input
+                      type="text"
+                      value={mergeSheetLabel}
+                      onChange={e => { setMergeSheetLabel(e.target.value); setMergeSheetLabelEdited(true) }}
+                      placeholder="e.g. Alice & Bob"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConfirmMergeSheet}
+                    className="w-full rounded-2xl bg-gwfc-blue py-3.5 text-sm font-semibold text-white"
+                  >
+                    Merge {mergeSheetSelected.length} members
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
         <StepIndicator step={2} />
         <div>
@@ -463,6 +587,47 @@ export function NewGroupForm({ userId }: Props) {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Merge section */}
+        {(mergeGroups.length > 0 || availableForMerge.length >= 2) && (
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Merges</p>
+            {mergeGroups.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {mergeGroups.map(g => (
+                  <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 ring-1 ring-teal-200">
+                    {g.label}
+                    <button
+                      type="button"
+                      onClick={() => removeMergeGroup(g.id)}
+                      className="ml-0.5 text-teal-500 hover:text-teal-800"
+                      aria-label={`Remove merge ${g.label}`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {availableForMerge.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => { setShowMergeSheet(true); setMergeSheetSelected([]); setMergeSheetLabel(''); setMergeSheetLabelEdited(false) }}
+                className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <path d="M8.59 13.51l4.83 2.98M13.41 7.51L8.59 10.49" />
+                </svg>
+                Merge members
+              </button>
+            )}
           </div>
         )}
 

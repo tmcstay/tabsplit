@@ -7,6 +7,8 @@ export interface Attendee {
   display_name: string
   phone: string | null
   email: string | null
+  mergeGroupId?: string | null
+  mergeLabel?: string | null
 }
 
 export async function createSplit(formData: FormData): Promise<string> {
@@ -51,18 +53,44 @@ export async function createSplit(formData: FormData): Promise<string> {
     console.log('createSplit: split created', split.id)
 
     if (attendees.length > 0) {
-      const { error: attendeesErr } = await supabase.from('attendees').insert(
+      const { data: insertedAttendees, error: attendeesErr } = await supabase.from('attendees').insert(
         attendees.map(a => ({
           split_id: split.id,
           display_name: a.display_name,
           phone: a.phone ?? null,
           email: a.email ?? null,
         }))
-      )
+      ).select()
       if (attendeesErr) {
         console.error('createSplit: failed to insert attendees:', attendeesErr)
       } else {
         console.log('createSplit: attendees inserted', attendees.length)
+      }
+
+      // Auto-apply merge groups from the group template
+      if (insertedAttendees && insertedAttendees.length > 0) {
+        const mergeMap: Record<string, { label: string; names: string[] }> = {}
+        for (const a of attendees) {
+          if (a.mergeGroupId) {
+            if (!mergeMap[a.mergeGroupId]) mergeMap[a.mergeGroupId] = { label: a.mergeLabel ?? '', names: [] }
+            mergeMap[a.mergeGroupId].names.push(a.display_name)
+          }
+        }
+        for (const merge of Object.values(mergeMap)) {
+          if (merge.names.length < 2) continue
+          const memberIds = insertedAttendees
+            .filter(a => merge.names.includes(a.display_name))
+            .map(a => a.id)
+          if (memberIds.length < 2) continue
+          const { data: ag } = await supabase
+            .from('attendee_groups')
+            .insert({ split_id: split.id, label: merge.label })
+            .select()
+            .single()
+          if (ag) {
+            await supabase.from('attendees').update({ group_id: ag.id }).in('id', memberIds)
+          }
+        }
       }
     }
 
