@@ -15,11 +15,19 @@ interface Attendee {
   mergeLabel: string | null
 }
 
+interface FavouriteContact {
+  id: string
+  display_name: string
+  phone: string | null
+  email: string | null
+}
+
 interface Props {
   userId: string
   groupId: string | null
   groupName: string | null
   initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[]
+  favourites: FavouriteContact[]
 }
 
 type Step = 1 | 2 | 3
@@ -64,8 +72,7 @@ async function tryImportContacts(): Promise<Attendee[] | null> {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees }: Props) {
-  console.log('NewSplitForm render — initialAttendees:', initialAttendees.length, 'groupId:', groupId)
+export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees, favourites }: Props) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -138,17 +145,14 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null
-    console.log('handleFileChange:', file ? { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified } : null)
     // Mobile Safari can return a File with size=0 — treat as valid if it has a name
     const validFile = file && (file.size > 0 || file.name.length > 0) ? file : null
     setReceipt(validFile)
-    console.log('setReceipt called with:', validFile?.name, validFile?.size)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(validFile ? URL.createObjectURL(validFile) : null)
   }
 
   async function handleSubmit() {
-    console.log('handleSubmit fired')
     setError(null)
     setLoading(true)
     try {
@@ -164,7 +168,6 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
       router.push(`/splits/${splitId}`)
     } catch (err) {
       if (err instanceof Error && err.message.includes('NEXT_REDIRECT')) throw err
-      console.error('createSplit error:', err)
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }
@@ -228,6 +231,56 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
             {groupName ? `Pre-filled from ${groupName}. Remove anyone who isn't here.` : 'Add everyone sharing this bill.'}
           </p>
         </div>
+
+        {/* Favourites quick-add */}
+        {favourites.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Favourites</p>
+            <div className="flex flex-wrap gap-2">
+              {favourites.map(f => {
+                const alreadyAdded = attendees.some(
+                  a => a.display_name.toLowerCase().trim() === f.display_name.toLowerCase().trim()
+                )
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    disabled={alreadyAdded}
+                    onClick={() => {
+                      if (alreadyAdded) return
+                      setAttendees(prev => [
+                        ...prev,
+                        { id: generateId(), display_name: f.display_name, phone: f.phone, email: f.email, mergeGroupId: null, mergeLabel: null },
+                      ])
+                    }}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                      alreadyAdded
+                        ? 'bg-slate-100 text-slate-300'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 active:bg-amber-200'
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24"
+                      fill={alreadyAdded ? 'currentColor' : 'currentColor'}
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className={alreadyAdded ? 'text-slate-300' : 'text-amber-400'}>
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    {f.display_name}
+                    {alreadyAdded ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Attendees list */}
         {attendees.length > 0 && (

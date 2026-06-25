@@ -4,7 +4,7 @@ import type { Tables } from '@/types/database'
 import { ShareButton } from './ShareButton'
 import { EditButton } from './EditButton'
 import { ResultsList } from './ResultsList'
-import type { PersonResult } from './PersonCard'
+import type { PersonResult, GroupMember } from './PersonCard'
 import { ShareWithEveryone } from './ShareWithEveryone'
 import type { ModalAttendee } from './ShareWithEveryone'
 import { ReceiptViewer } from './ReceiptViewer'
@@ -77,11 +77,15 @@ function buildAcc(
   return acc
 }
 
+type FavouriteContact = { id: string; display_name: string }
+
 function calculateResults(
   acc: Record<string, AttendeeAcc>,
   attendees: Tables<'attendees'>[],
-  attendeeGroups: Tables<'attendee_groups'>[]
+  attendeeGroups: Tables<'attendee_groups'>[],
+  favourites: FavouriteContact[]
 ): PersonResult[] {
+  const favByName = new Map(favourites.map(f => [f.display_name.toLowerCase().trim(), f.id]))
   const grouped = new Set<string>()
   const results: PersonResult[] = []
 
@@ -92,14 +96,22 @@ function calculateResults(
     const lines = members.flatMap(m => acc[m.id]?.lines ?? [])
     const discountLines = members.flatMap(m => acc[m.id]?.discountLines ?? [])
     const paid = members.length > 0 && members.every(m => m.paid)
+    const groupMembers: GroupMember[] = members.map(m => ({
+      display_name: m.display_name,
+      phone: m.phone ?? null,
+      email: m.email ?? null,
+    }))
     results.push({
       id: g.id, label: g.label, total, itemLines: lines, discountLines,
       paid, isGroup: true, phone: g.phone ?? null, email: g.email ?? null,
+      groupMembers, isFavourite: false, favouriteId: null,
     })
   }
 
   for (const a of attendees) {
     if (grouped.has(a.id)) continue
+    const key = a.display_name.toLowerCase().trim()
+    const favouriteId = favByName.get(key) ?? null
     results.push({
       id: a.id,
       label: a.display_name,
@@ -110,6 +122,9 @@ function calculateResults(
       isGroup: false,
       phone: a.phone ?? null,
       email: a.email ?? null,
+      isFavourite: !!favouriteId,
+      favouriteId,
+      groupMembers: [],
     })
   }
 
@@ -137,6 +152,7 @@ export default async function SplitResultsPage({
     { data: shareLinks },
     { data: discounts },
     { data: organiserProfile },
+    { data: favourites },
   ] = await Promise.all([
     supabase.from('attendees').select('*').eq('split_id', id),
     supabase.from('attendee_groups').select('*').eq('split_id', id),
@@ -144,6 +160,7 @@ export default async function SplitResultsPage({
     supabase.from('share_links').select('token').eq('split_id', id).limit(1),
     supabase.from('discounts').select('*').eq('split_id', id).order('created_at'),
     supabase.from('users').select('display_name, payid, payid_label').eq('id', user.id).single(),
+    supabase.from('favourite_contacts').select('id, display_name').eq('user_id', user.id),
   ])
 
   const itemIds = (items ?? []).map(i => i.id)
@@ -166,7 +183,7 @@ export default async function SplitResultsPage({
     discountAttendees ?? []
   )
 
-  const results = calculateResults(acc, attendees ?? [], attendeeGroups ?? [])
+  const results = calculateResults(acc, attendees ?? [], attendeeGroups ?? [], favourites ?? [])
 
   const groupedAttendeeIds = new Set(
     (attendeeGroups ?? []).flatMap(g =>

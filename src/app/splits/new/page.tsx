@@ -13,6 +13,12 @@ export default async function NewSplitPage({
 
   const { group: groupId, members: membersParam } = await searchParams
 
+  const { data: favourites } = await supabase
+    .from('favourite_contacts')
+    .select('id, display_name, phone, email')
+    .eq('user_id', user.id)
+    .order('display_name', { ascending: true })
+
   let groupName: string | null = null
   let initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[] = []
 
@@ -55,6 +61,7 @@ export default async function NewSplitPage({
           groupId={groupId ?? null}
           groupName={groupName}
           initialAttendees={initialAttendees}
+          favourites={favourites ?? []}
         />
       </main>
     </div>

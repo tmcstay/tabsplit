@@ -34,13 +34,6 @@ export function ShareWithEveryone({
   const [method, setMethod] = useState<Method>('link')
 
   function openModal() {
-    // DEBUG — remove once phone flow confirmed working
-    console.log('[ShareWithEveryone] attendees on open:', attendees.map(a => ({
-      name: a.display_name,
-      phone: a.phone,
-      email: a.email,
-      total: a.total,
-    })))
     setOpen(true)
   }
   const [sentIds, setSentIds] = useState<Set<string>>(new Set())

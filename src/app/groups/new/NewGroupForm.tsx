@@ -37,8 +37,16 @@ interface SavedGroup {
   group_members: SavedGroupMember[]
 }
 
+interface FavouriteContact {
+  id: string
+  display_name: string
+  phone: string | null
+  email: string | null
+}
+
 interface Props {
   userId: string
+  favourites: FavouriteContact[]
 }
 
 type Step = 1 | 2 | 3
@@ -92,7 +100,7 @@ interface MergeGroup {
   memberIds: string[]
 }
 
-export function NewGroupForm({ userId }: Props) {
+export function NewGroupForm({ userId, favourites }: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -431,6 +439,55 @@ export function NewGroupForm({ userId }: Props) {
             Add the people you split bills with. Each person needs at least a phone number or email.
           </p>
         </div>
+
+        {/* Favourites quick-add */}
+        {favourites.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Favourites</p>
+            <div className="flex flex-wrap gap-2">
+              {favourites.map(f => {
+                const alreadyAdded = members.some(
+                  m => m.display_name.toLowerCase().trim() === f.display_name.toLowerCase().trim()
+                )
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    disabled={alreadyAdded}
+                    onClick={() => {
+                      if (alreadyAdded) return
+                      setMembers(prev => [
+                        ...prev,
+                        { id: generateId(), display_name: f.display_name, phone: f.phone, email: f.email },
+                      ])
+                    }}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                      alreadyAdded
+                        ? 'bg-slate-100 text-slate-300'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 active:bg-amber-200'
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24"
+                      fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className={alreadyAdded ? 'text-slate-300' : 'text-amber-400'}>
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    {f.display_name}
+                    {alreadyAdded ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Manual add form */}
         <form onSubmit={addMember} className="space-y-2.5">

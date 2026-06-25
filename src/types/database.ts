@@ -290,6 +290,33 @@ export interface Database {
         }
         Relationships: []
       }
+      favourite_contacts: {
+        Row: {
+          id: string
+          user_id: string
+          display_name: string
+          phone: string | null
+          email: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          display_name: string
+          phone?: string | null
+          email?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          display_name?: string
+          phone?: string | null
+          email?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       discount_attendees: {
         Row: {
           id: string
