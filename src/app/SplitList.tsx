@@ -312,12 +312,12 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
   const [openId, setOpenId] = useState<string | null>(null)
 
   function handleArchive(id: string) {
-    setSplits(prev => prev.map(s => s.id === id ? { ...s, status: 'archived' as const } : s))
+    setSplits(prev => prev.filter(s => s.id !== id))
     setOpenId(null)
   }
 
-  function handleRestore(id: string, status: SplitStatus) {
-    setSplits(prev => prev.map(s => s.id === id ? { ...s, status } : s))
+  function handleRestore(id: string, _status: SplitStatus) {
+    setSplits(prev => prev.filter(s => s.id !== id))
     setOpenId(null)
   }
 

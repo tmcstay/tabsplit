@@ -38,9 +38,9 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
 
   const shareableGroupMembers = person.groupMembers.filter(m => m.phone || m.email)
 
-  function sendShare(displayName: string, phone: string | null, email: string | null) {
+  function sendShare() {
     if (!shareUrl) return
-    const message = `Hey ${displayName}, here's the TabSplit for ${splitTitle} — your group owes $${person.total.toFixed(2)}. ${shareUrl}`
+    const message = `Hey ${person.label}, here's the TabSplit for ${splitTitle} — your group owes $${person.total.toFixed(2)}. ${shareUrl}`
     if (navigator.share) {
       navigator.share({ text: message }).catch(() => {})
     } else {
@@ -94,7 +94,7 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
               <button
                 key={i}
                 type="button"
-                onClick={() => { sendShare(m.display_name, m.phone, m.email); setShowGroupSharePicker(false) }}
+                onClick={() => { sendShare(); setShowGroupSharePicker(false) }}
                 className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100"
               >
                 <div className="text-left">
@@ -114,8 +114,9 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
       <div className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-colors ${
         person.paid ? 'ring-emerald-200' : 'ring-slate-200'
       }`}>
-        {/* Header — pay circle on left, expand tap area on right */}
+        {/* Header row */}
         <div className="flex items-center">
+          {/* Paid circle — left */}
           <button
             type="button"
             onClick={handleTogglePaid}
@@ -136,10 +137,11 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
             </span>
           </button>
 
+          {/* Expand tap area — flex-1 */}
           <button
             type="button"
             onClick={() => setOpen(v => !v)}
-            className="flex flex-1 items-center justify-between py-4 pr-4 text-left"
+            className="flex flex-1 items-center justify-between py-4 pr-2 text-left"
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -159,7 +161,7 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
                 )}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <p className={`text-xl font-bold ${person.paid ? 'text-emerald-600' : 'text-gwfc-blue'}`}>
                 ${person.total.toFixed(2)}
               </p>
@@ -172,6 +174,24 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
               </svg>
             </div>
           </button>
+
+          {/* Star button — right, only for individuals */}
+          {!person.isGroup && (
+            <button
+              type="button"
+              onClick={handleToggleFavourite}
+              className={`shrink-0 py-4 pl-1 pr-4 transition-colors ${
+                person.isFavourite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'
+              }`}
+              aria-label={person.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24"
+                fill={person.isFavourite ? 'currentColor' : 'none'}
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {open && (
@@ -235,25 +255,6 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
                     <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
                   </svg>
                   Resend
-                </button>
-              )}
-
-              {!person.isGroup && (
-                <button
-                  type="button"
-                  onClick={handleToggleFavourite}
-                  className={`flex items-center justify-center rounded-xl px-3 py-2.5 transition-colors ${
-                    person.isFavourite
-                      ? 'bg-amber-50 text-amber-500 hover:bg-amber-100'
-                      : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-amber-400'
-                  }`}
-                  aria-label={person.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24"
-                    fill={person.isFavourite ? 'currentColor' : 'none'}
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
                 </button>
               )}
             </div>

@@ -99,10 +99,10 @@ export function ShareWithEveryone({
       return
     }
 
-    // Group with one contactable member — send directly to them
+    // Group with one contactable member — send directly to them (use group label in message)
     if (attendee.groupMembers.length > 0 && contactableMembers.length === 1) {
       const m = contactableMembers[0]
-      await doSend(m.display_name, m.phone, m.email, attendee.total, attendee.id)
+      await doSend(attendee.display_name, m.phone, m.email, attendee.total, attendee.id)
       return
     }
 
@@ -165,7 +165,7 @@ export function ShareWithEveryone({
                   type="button"
                   disabled={!hasContact}
                   onClick={async () => {
-                    await doSend(m.display_name, m.phone, m.email, pickerAttendee.total, pickerAttendee.id)
+                    await doSend(pickerAttendee.display_name, m.phone, m.email, pickerAttendee.total, pickerAttendee.id)
                     setPickerAttendee(null)
                   }}
                   className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40"

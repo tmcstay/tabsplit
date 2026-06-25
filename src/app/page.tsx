@@ -23,8 +23,8 @@ export default async function HomePage() {
       .from('splits')
       .select('*, attendees(count)')
       .eq('organiser_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(10),
+      .in('status', ['pending', 'draft'])
+      .order('created_at', { ascending: false }),
   ])
 
   const openSplits = (openSplitsRaw ?? []) as unknown as OpenSplitWithItems[]

@@ -13,7 +13,7 @@ export default async function GroupDetailPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: group }, { data: members }] = await Promise.all([
+  const [{ data: group }, { data: members }, { data: favourites }] = await Promise.all([
     supabase
       .from('groups')
       .select('*')
@@ -25,13 +25,17 @@ export default async function GroupDetailPage({
       .select('*')
       .eq('group_id', id)
       .order('display_name'),
+    supabase
+      .from('favourite_contacts')
+      .select('*')
+      .eq('user_id', user.id),
   ])
 
   if (!group) notFound()
 
   return (
     <div className="flex min-h-screen flex-col pb-32">
-      <GroupDetail group={group} members={members ?? []} />
+      <GroupDetail group={group} members={members ?? []} favourites={favourites ?? []} />
     </div>
   )
 }

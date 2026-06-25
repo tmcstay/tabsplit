@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createSplit } from './actions'
 import { generateId } from '@/lib/uuid'
 import { ContactPicker, type Contact } from '@/components/ContactPicker'
+import { addFavourite, removeFavourite } from '@/app/favourites/actions'
 
 interface Attendee {
   id: string
@@ -103,10 +104,47 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   const [loading, setLoading] = useState(false)
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [importedMemberIds, setImportedMemberIds] = useState<Set<string>>(new Set())
+  const [favMap, setFavMap] = useState<Map<string, string>>(
+    () => new Map(favourites.map(f => [f.display_name.toLowerCase().trim(), f.id]))
+  )
   const [error, setError] = useState<string | null>(null)
   const [contactsMessage, setContactsMessage] = useState<string | null>(null)
   const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
   const [showPicker, setShowPicker] = useState(false)
+
+  async function handleToggleFav(name: string, phone: string | null, email: string | null) {
+    const key = name.toLowerCase().trim()
+    const existingId = favMap.get(key)
+    if (existingId) {
+      setFavMap(prev => { const m = new Map(prev); m.delete(key); return m })
+      try { await removeFavourite(existingId) } catch {
+        setFavMap(prev => new Map([...prev, [key, existingId]]))
+      }
+    } else {
+      const tempId = `temp-${key}`
+      setFavMap(prev => new Map([...prev, [key, tempId]]))
+      try {
+        const realId = await addFavourite(name, phone, email)
+        setFavMap(prev => { const m = new Map(prev); m.set(key, realId); return m })
+      } catch {
+        setFavMap(prev => { const m = new Map(prev); m.delete(key); return m })
+      }
+    }
+  }
+
+  function starBtn(name: string, phone: string | null, email: string | null) {
+    const isFav = favMap.has(name.toLowerCase().trim())
+    return (
+      <button type="button" onClick={() => handleToggleFav(name, phone, email)}
+        className={`shrink-0 transition-colors ${isFav ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'}`}
+        aria-label={isFav ? 'Remove from favourites' : 'Add to favourites'}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'}
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      </button>
+    )
+  }
 
   function addAttendee(e: React.FormEvent) {
     e.preventDefault()
@@ -373,17 +411,18 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
         {attendees.length > 0 && (
           <ul className="space-y-2">
             {attendees.map(a => (
-              <li key={a.id} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-                <div className="min-w-0">
+              <li key={a.id} className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gwfc-blue">{a.display_name}</p>
                   {(a.phone || a.email) && (
                     <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
                   )}
                 </div>
+                {starBtn(a.display_name, a.phone, a.email)}
                 <button
                   type="button"
                   onClick={() => removeAttendee(a.id)}
-                  className="ml-3 shrink-0 text-slate-400 hover:text-red-500"
+                  className="shrink-0 text-slate-400 hover:text-red-500"
                   aria-label={`Remove ${a.display_name}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"

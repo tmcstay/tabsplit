@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
-import { SplitList } from '../SplitList'
+import { SplitsPageClient } from './SplitsPageClient'
 
 type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
 
@@ -21,10 +21,7 @@ export default async function SplitsPage() {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
         <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">Splits</h1>
       </header>
-
-      <main className="flex-1 px-4 py-5">
-        <SplitList initialSplits={(splits ?? []) as unknown as SplitWithCount[]} />
-      </main>
+      <SplitsPageClient splits={(splits ?? []) as unknown as SplitWithCount[]} />
     </div>
   )
 }
