@@ -178,6 +178,22 @@ export async function removeDiscount(discountId: string): Promise<void> {
   await supabase.from('discounts').delete().eq('id', discountId)
 }
 
+export async function updateAttendee(
+  attendeeId: string,
+  data: { display_name: string; phone: string | null; email: string | null }
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase
+    .from('attendees')
+    .update(data)
+    .eq('id', attendeeId)
+
+  if (error) throw new Error('Failed to update attendee.')
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
