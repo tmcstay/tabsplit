@@ -553,6 +553,7 @@ export function GroupDetail({ group, members, favourites }: Props) {
                   return (
                     <li key={m.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
                       <div className="flex items-center gap-2 px-4 py-3">
+                        {starBtn(edits.display_name, edits.phone || null, edits.email || null)}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gwfc-blue">{edits.display_name}</p>
                           {mergeGroup ? (
@@ -561,7 +562,6 @@ export function GroupDetail({ group, members, favourites }: Props) {
                             <p className="truncate text-xs text-slate-400">{edits.phone || edits.email}</p>
                           ) : null}
                         </div>
-                        {starBtn(edits.display_name, edits.phone || null, edits.email || null)}
                         <button
                           type="button"
                           onClick={() => setExpandedMemberId(isExpanded ? null : m.id)}
@@ -636,6 +636,7 @@ export function GroupDetail({ group, members, favourites }: Props) {
                   const mergeGroup = getMergeGroupForMember(m.id)
                   return (
                     <li key={m.id} className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                      {starBtn(m.display_name, m.phone, m.email)}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
                         {mergeGroup ? (
@@ -645,7 +646,6 @@ export function GroupDetail({ group, members, favourites }: Props) {
                         ) : null}
                         <p className="text-xs italic text-slate-400">New</p>
                       </div>
-                      {starBtn(m.display_name, m.phone, m.email)}
                       <button
                         type="button"
                         onClick={() => removeNewMember(m.id)}

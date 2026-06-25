@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import type { Tables } from '@/types/database'
-import { removeFavourite } from '@/app/favourites/actions'
+import { removeFavourite, addFavourite } from '@/app/favourites/actions'
 
 type GroupWithCount = Tables<'groups'> & { group_members: [{ count: number }] | [] }
 type Favourite = Tables<'favourite_contacts'>
@@ -107,6 +107,8 @@ function FavouriteCard({ fav, onRemove }: { fav: Favourite; onRemove: (id: strin
   )
 }
 
+const inputCls = 'w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500'
+
 interface Props {
   groups: GroupWithCount[]
   favourites: Favourite[]
@@ -116,8 +118,44 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
   const [tab, setTab] = useState<'groups' | 'favourites'>('groups')
   const [favs, setFavs] = useState(initialFavourites)
 
+  // Add favourite form
+  const [newName, setNewName] = useState('')
+  const [newPhone, setNewPhone] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [adding, setAdding] = useState(false)
+
   function handleRemoveFav(id: string) {
     setFavs(prev => prev.filter(f => f.id !== id))
+  }
+
+  async function handleAddFav(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newName.trim() || adding) return
+    setAdding(true)
+    const name = newName.trim()
+    const phone = newPhone.trim() || null
+    const email = newEmail.trim() || null
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Favourite = {
+      id: tempId,
+      user_id: '',
+      display_name: name,
+      phone,
+      email,
+      created_at: new Date().toISOString(),
+    }
+    setFavs(prev => [...prev, optimistic])
+    setNewName('')
+    setNewPhone('')
+    setNewEmail('')
+    try {
+      const realId = await addFavourite(name, phone, email)
+      setFavs(prev => prev.map(f => f.id === tempId ? { ...f, id: realId } : f))
+    } catch {
+      setFavs(prev => prev.filter(f => f.id !== tempId))
+    } finally {
+      setAdding(false)
+    }
   }
 
   return (
@@ -179,26 +217,46 @@ export function GroupsPageClient({ groups, favourites: initialFavourites }: Prop
         </>
       ) : (
         <>
-          {favs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
-                  className="text-amber-300">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </div>
-              <p className="text-base font-semibold text-gwfc-blue">No favourites yet</p>
-              <p className="mt-1.5 max-w-xs text-sm text-slate-400">
-                Star a person on the results page to save them here for quick access.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
+          {favs.length > 0 && (
+            <div className="mb-4 space-y-3">
               {favs.map(fav => (
                 <FavouriteCard key={fav.id} fav={fav} onRemove={handleRemoveFav} />
               ))}
             </div>
           )}
+
+          {/* Add favourite form */}
+          <form onSubmit={handleAddFav} className="space-y-2.5 rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add favourite</p>
+            <input
+              type="text"
+              placeholder="Name"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              className={inputCls}
+            />
+            <input
+              type="tel"
+              placeholder="Phone (optional)"
+              value={newPhone}
+              onChange={e => setNewPhone(e.target.value)}
+              className={inputCls}
+            />
+            <input
+              type="email"
+              placeholder="Email (optional)"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              className={inputCls}
+            />
+            <button
+              type="submit"
+              disabled={!newName.trim() || adding}
+              className="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {adding ? 'Adding…' : 'Add to favourites'}
+            </button>
+          </form>
         </>
       )}
     </main>

@@ -412,13 +412,13 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
           <ul className="space-y-2">
             {attendees.map(a => (
               <li key={a.id} className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                {starBtn(a.display_name, a.phone, a.email)}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gwfc-blue">{a.display_name}</p>
                   {(a.phone || a.email) && (
                     <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
                   )}
                 </div>
-                {starBtn(a.display_name, a.phone, a.email)}
                 <button
                   type="button"
                   onClick={() => removeAttendee(a.id)}

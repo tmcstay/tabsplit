@@ -662,13 +662,13 @@ export function NewGroupForm({ userId, favourites }: Props) {
             <ul className="space-y-2">
               {members.map(m => (
                 <li key={m.id} className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                  {starBtn(m.display_name, m.phone, m.email)}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
                     {(m.phone || m.email) && (
                       <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
                     )}
                   </div>
-                  {starBtn(m.display_name, m.phone, m.email)}
                   <button
                     type="button"
                     onClick={() => removeMember(m.id)}

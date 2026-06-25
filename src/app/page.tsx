@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { SplitList } from './SplitList'
 
-type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
+type SplitWithCount = Tables<'splits'> & { attendees: { paid: boolean }[] }
 type OpenSplitWithItems = { id: string; items: Array<{ price: number }> | null }
 
 const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null
@@ -21,7 +21,7 @@ export default async function HomePage() {
       .in('status', ['pending', 'draft', 'finalised']),
     supabase
       .from('splits')
-      .select('*, attendees(count)')
+      .select('*, attendees(paid)')
       .eq('organiser_id', user.id)
       .in('status', ['pending', 'draft'])
       .order('created_at', { ascending: false }),

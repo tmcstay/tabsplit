@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { SplitsPageClient } from './SplitsPageClient'
 
-type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
+type SplitWithCount = Tables<'splits'> & { attendees: { paid: boolean }[] }
 
 export default async function SplitsPage() {
   const supabase = await createClient()
@@ -12,7 +12,7 @@ export default async function SplitsPage() {
 
   const { data: splits } = await supabase
     .from('splits')
-    .select('*, attendees(count)')
+    .select('*, attendees(paid)')
     .eq('organiser_id', user.id)
     .order('created_at', { ascending: false })
 
