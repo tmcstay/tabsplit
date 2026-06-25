@@ -196,6 +196,15 @@ export async function updateAttendee(
   if (error) throw new Error('Failed to update attendee.')
 }
 
+export async function unmergeGroup(groupId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  await supabase.from('attendees').update({ group_id: null }).eq('group_id', groupId)
+  await supabase.from('attendee_groups').delete().eq('id', groupId)
+}
+
 export async function markPaid(
   splitId: string,
   entityId: string,

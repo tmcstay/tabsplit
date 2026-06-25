@@ -22,12 +22,26 @@ interface FavouriteContact {
   email: string | null
 }
 
+interface SavedGroupMember {
+  id: string
+  display_name: string
+  phone: string | null
+  email: string | null
+}
+
+interface SavedGroup {
+  id: string
+  name: string
+  group_members: SavedGroupMember[]
+}
+
 interface Props {
   userId: string
   groupId: string | null
   groupName: string | null
   initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[]
   favourites: FavouriteContact[]
+  savedGroups: SavedGroup[]
 }
 
 type Step = 1 | 2 | 3
@@ -72,7 +86,7 @@ async function tryImportContacts(): Promise<Attendee[] | null> {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees, favourites }: Props) {
+export function NewSplitForm({ userId: _userId, groupId, groupName, initialAttendees, favourites, savedGroups }: Props) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -87,6 +101,8 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
   const [receipt, setReceipt] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
+  const [importedMemberIds, setImportedMemberIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [contactsMessage, setContactsMessage] = useState<string | null>(null)
   const [pickerContacts, setPickerContacts] = useState<Contact[]>([])
@@ -113,6 +129,19 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
 
   function removeAttendee(id: string) {
     setAttendees(prev => prev.filter(a => a.id !== id))
+  }
+
+  function toggleImportMember(member: SavedGroupMember) {
+    if (importedMemberIds.has(member.id)) {
+      setAttendees(prev => prev.filter(a => a.id !== member.id))
+      setImportedMemberIds(s => { const n = new Set(s); n.delete(member.id); return n })
+    } else {
+      setAttendees(prev => [
+        ...prev,
+        { id: member.id, display_name: member.display_name, phone: member.phone, email: member.email, mergeGroupId: null, mergeLabel: null },
+      ])
+      setImportedMemberIds(s => new Set([...s, member.id]))
+    }
   }
 
   async function handleImportContacts() {
@@ -279,6 +308,64 @@ export function NewSplitForm({ userId: _userId, groupId, groupName, initialAtten
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {/* Saved groups quick-add */}
+        {savedGroups.length > 0 && (
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <p className="border-b border-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Add from group
+            </p>
+            {savedGroups.map((g, i) => (
+              <div key={g.id} className={i > 0 ? 'border-t border-slate-100' : ''}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroupId(expandedGroupId === g.id ? null : g.id)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
+                >
+                  <span className="text-sm font-medium text-gwfc-blue">{g.name}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                    className={`shrink-0 text-slate-400 transition-transform ${expandedGroupId === g.id ? 'rotate-180' : ''}`}>
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                {expandedGroupId === g.id && (
+                  <div className="border-t border-slate-100">
+                    {g.group_members.map(m => {
+                      const added = importedMemberIds.has(m.id) ||
+                        attendees.some(a => a.display_name.toLowerCase().trim() === m.display_name.toLowerCase().trim() && !importedMemberIds.has(m.id) === false)
+                      const isImported = importedMemberIds.has(m.id)
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleImportMember(m)}
+                          className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-slate-50 active:bg-slate-100"
+                        >
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                            isImported ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'
+                          }`}>
+                            {isImported && (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                                <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </span>
+                          <div className="min-w-0 text-left">
+                            <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
+                            {(m.phone || m.email) && (
+                              <p className="truncate text-xs text-slate-400">{m.phone ?? m.email}</p>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

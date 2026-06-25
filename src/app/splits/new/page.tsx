@@ -13,11 +13,19 @@ export default async function NewSplitPage({
 
   const { group: groupId, members: membersParam } = await searchParams
 
-  const { data: favourites } = await supabase
-    .from('favourite_contacts')
-    .select('id, display_name, phone, email')
-    .eq('user_id', user.id)
-    .order('display_name', { ascending: true })
+  const [{ data: favourites }, { data: savedGroupsRaw }] = await Promise.all([
+    supabase
+      .from('favourite_contacts')
+      .select('id, display_name, phone, email')
+      .eq('user_id', user.id)
+      .order('display_name', { ascending: true }),
+    supabase
+      .from('groups')
+      .select('id, name, group_members(id, display_name, phone, email)')
+      .eq('organiser_id', user.id)
+      .eq('saved', true)
+      .order('name', { ascending: true }),
+  ])
 
   let groupName: string | null = null
   let initialAttendees: { id: string; display_name: string; phone: string | null; email: string | null; mergeGroupId: string | null; mergeLabel: string | null }[] = []
@@ -62,6 +70,7 @@ export default async function NewSplitPage({
           groupName={groupName}
           initialAttendees={initialAttendees}
           favourites={favourites ?? []}
+          savedGroups={(savedGroupsRaw ?? []) as unknown as { id: string; name: string; group_members: { id: string; display_name: string; phone: string | null; email: string | null }[] }[]}
         />
       </main>
     </div>

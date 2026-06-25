@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
-import { saveItems, assignItem, mergeAttendees, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee } from './actions'
+import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee } from './actions'
 
 interface Props {
   split: Tables<'splits'>
@@ -87,7 +87,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 export function SplitDetail({
   split,
   attendees,
-  attendeeGroups: _attendeeGroups,
+  attendeeGroups,
   items,
   initialAssignments,
   signedReceiptUrl,
@@ -214,8 +214,20 @@ export function SplitDetail({
     if (!assignModalItemId) return
     const itemId = assignModalItemId
     const ids = assignSelected
-    setAssignments(prev => ({ ...prev, [itemId]: ids }))
-    setAssignModalItemId(null)
+    const newAssignments = { ...assignments, [itemId]: ids }
+    setAssignments(newAssignments)
+
+    // Auto-advance to the next unassigned item
+    const currentIndex = items.findIndex(i => i.id === itemId)
+    const nextUnassigned = items.slice(currentIndex + 1).find(i => !(newAssignments[i.id] ?? []).length)
+    if (nextUnassigned) {
+      setAssignModalItemId(nextUnassigned.id)
+      setAssignSelected([])
+    } else {
+      setAssignModalItemId(null)
+      setAssignSelected([])
+    }
+
     await assignItem(itemId, ids)
   }
 
@@ -519,6 +531,19 @@ export function SplitDetail({
     }
   }
 
+  async function handleUnmerge(groupId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await unmergeGroup(groupId)
+      router.refresh()
+    } catch {
+      setError('Failed to unmerge.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleRemoveDiscount(discountId: string) {
     setBusy(true)
     setError(null)
@@ -730,6 +755,37 @@ export function SplitDetail({
               Edit attendees
             </button>
           </div>
+
+          {/* Applied merges summary */}
+          {attendeeGroups.length > 0 && (
+            <div className="space-y-1.5">
+              {attendeeGroups.map(g => {
+                const memberNames = attendees
+                  .filter(a => a.group_id === g.id)
+                  .map(a => a.display_name)
+                  .join(', ')
+                return (
+                  <div key={g.id} className="flex items-center justify-between rounded-lg bg-teal-50 px-3 py-2 ring-1 ring-teal-100">
+                    <p className="text-xs text-teal-700">
+                      <span className="font-semibold">{g.label}</span>
+                      {memberNames && <span className="text-teal-600"> · {memberNames}</span>}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleUnmerge(g.id)}
+                      disabled={busy}
+                      className="ml-2 shrink-0 text-teal-400 hover:text-teal-600 disabled:opacity-40"
+                      aria-label="Unmerge"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Applied discounts summary */}
           {discounts.length > 0 && (

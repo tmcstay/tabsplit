@@ -203,6 +203,11 @@ export default async function SplitResultsPage({
         phone: g.phone ?? null,
         email: g.email ?? null,
         total,
+        groupMembers: members.map(m => ({
+          display_name: m.display_name,
+          phone: m.phone ?? null,
+          email: m.email ?? null,
+        })),
       }
     }),
     ...(attendees ?? [])
@@ -213,6 +218,7 @@ export default async function SplitResultsPage({
         phone: a.phone ?? null,
         email: a.email ?? null,
         total: acc[a.id]?.total ?? 0,
+        groupMembers: [],
       })),
   ]
 

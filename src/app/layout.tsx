@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import Script from 'next/script'
 import './globals.css'
 import { BottomNav } from './_components/BottomNav'
 
@@ -41,14 +40,6 @@ export default function RootLayout({
       <body className="h-full overflow-y-auto overscroll-none bg-slate-50 font-sans text-gwfc-blue">
         {children}
         <BottomNav />
-        <Script id="eruda" strategy="afterInteractive">{`
-          if (window.location.hostname !== 'localhost' || window.location.hostname.includes('vercel.app')) {
-            var s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/eruda';
-            s.onload = function() { eruda.init(); };
-            document.head.appendChild(s);
-          }
-        `}</Script>
       </body>
     </html>
   )

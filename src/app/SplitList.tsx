@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables, SplitStatus } from '@/types/database'
-import { archiveSplit, deleteSplit } from './splits/actions'
+import { archiveSplit, unarchiveSplit, deleteSplit } from './splits/actions'
 
 type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
 
@@ -103,6 +103,7 @@ const ACTION_WIDTH = 160 // 80px × 2 buttons
 function SplitItem({
   split,
   onArchive,
+  onRestore,
   onDelete,
   isOpen,
   onOpen,
@@ -110,6 +111,7 @@ function SplitItem({
 }: {
   split: SplitWithCount
   onArchive: (id: string) => void
+  onRestore: (id: string, status: SplitStatus) => void
   onDelete: (id: string) => void
   isOpen: boolean
   onOpen: () => void
@@ -173,8 +175,13 @@ function SplitItem({
     e.stopPropagation()
     setBusy('archive')
     try {
-      await archiveSplit(split.id)
-      onArchive(split.id)
+      if (isArchived) {
+        const status = await unarchiveSplit(split.id)
+        onRestore(split.id, status)
+      } else {
+        await archiveSplit(split.id)
+        onArchive(split.id)
+      }
     } catch {
       setBusy(null)
       setTransitioning(true)
@@ -206,17 +213,22 @@ function SplitItem({
     <div className="relative overflow-hidden rounded-2xl">
       {/* Action buttons revealed behind the card */}
       <div className="absolute inset-y-0 right-0 flex" style={{ width: ACTION_WIDTH }}>
-        {/* Archive */}
+        {/* Archive / Restore */}
         <button
           type="button"
           onClick={handleArchive}
-          disabled={!!busy || isArchived}
-          className="flex w-20 flex-col items-center justify-center gap-0.5 bg-slate-500 text-white disabled:opacity-50"
-          aria-label={isArchived ? 'Already archived' : 'Archive split'}
+          disabled={!!busy}
+          className={`flex w-20 flex-col items-center justify-center gap-0.5 text-white disabled:opacity-50 ${isArchived ? 'bg-teal-600' : 'bg-slate-500'}`}
+          aria-label={isArchived ? 'Restore split' : 'Archive split'}
         >
           {busy === 'archive' ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="animate-spin">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          ) : isArchived ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1018 0 9 9 0 00-18 0" />
+              <path d="M12 8v4l3 3" />
             </svg>
           ) : (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -225,7 +237,7 @@ function SplitItem({
               <line x1="10" y1="12" x2="14" y2="12" />
             </svg>
           )}
-          <span className="text-xs font-semibold">{busy === 'archive' ? '…' : isArchived ? 'Archived' : 'Archive'}</span>
+          <span className="text-xs font-semibold">{busy === 'archive' ? '…' : isArchived ? 'Restore' : 'Archive'}</span>
         </button>
 
         {/* Delete */}
@@ -304,6 +316,11 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
     setOpenId(null)
   }
 
+  function handleRestore(id: string, status: SplitStatus) {
+    setSplits(prev => prev.map(s => s.id === id ? { ...s, status } : s))
+    setOpenId(null)
+  }
+
   function handleDelete(id: string) {
     setSplits(prev => prev.filter(s => s.id !== id))
     setOpenId(null)
@@ -334,6 +351,7 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
           key={split.id}
           split={split}
           onArchive={handleArchive}
+          onRestore={handleRestore}
           onDelete={handleDelete}
           isOpen={openId === split.id}
           onOpen={() => setOpenId(split.id)}
