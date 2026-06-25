@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Tables, SplitStatus } from '@/types/database'
-import { deleteSplit } from './splits/actions'
+import { archiveSplit, deleteSplit } from './splits/actions'
 
 type SplitWithCount = Tables<'splits'> & { attendees: [{ count: number }] | [] }
 
@@ -20,9 +20,9 @@ const STATUS_STYLES: Record<SplitStatus, { label: string; cls: string }> = {
   pending:   { label: 'Pending',   cls: 'bg-blue-50 text-blue-600' },
   draft:     { label: 'Draft',     cls: 'bg-amber-50 text-amber-700' },
   finalised: { label: 'Finalised', cls: 'bg-green-50 text-green-700' },
+  archived:  { label: 'Archived',  cls: 'bg-slate-100 text-slate-500' },
 }
 
-// Deterministic gradient from split ID
 const GRADIENTS = [
   'linear-gradient(135deg, #14b8a6, #3b82f6)',
   'linear-gradient(135deg, #f97316, #ef4444)',
@@ -81,7 +81,6 @@ function SplitIconSvg({ type }: { type: ReturnType<typeof getSplitIcon> }) {
       <path d="M4.22 15h15.56M8 11h.01M12 9h.01M16 11h.01" />
     </svg>
   )
-  // receipt (default)
   return (
     <svg {...props}>
       <rect x="5" y="2" width="14" height="20" rx="2" />
@@ -99,106 +98,198 @@ function StatusBadge({ status }: { status: SplitStatus }) {
   )
 }
 
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-    </svg>
-  )
-}
+const ACTION_WIDTH = 160 // 80px × 2 buttons
 
-function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: string) => void }) {
-  const count = split.attendees[0]?.count ?? 0
-  const [confirming, setConfirming] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+function SplitItem({
+  split,
+  onArchive,
+  onDelete,
+  isOpen,
+  onOpen,
+  onClose,
+}: {
+  split: SplitWithCount
+  onArchive: (id: string) => void
+  onDelete: (id: string) => void
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const [transitioning, setTransitioning] = useState(false)
+  const [busy, setBusy] = useState<'archive' | 'delete' | null>(null)
+  const startXRef = useRef(0)
+  const startOffsetRef = useRef(0)
+  const didMoveRef = useRef(false)
 
-  async function handleDelete(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!confirming) {
-      setConfirming(true)
+  // Snap back when another card opens
+  useEffect(() => {
+    if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTransitioning(true)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSwipeOffset(0)
+    }
+  }, [isOpen])
+
+  function handleTouchStart(e: React.TouchEvent) {
+    startXRef.current = e.touches[0].clientX
+    startOffsetRef.current = swipeOffset
+    didMoveRef.current = false
+    setTransitioning(false)
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    const deltaX = e.touches[0].clientX - startXRef.current
+    if (Math.abs(deltaX) > 5) didMoveRef.current = true
+    const newOffset = Math.min(0, Math.max(-ACTION_WIDTH, startOffsetRef.current + deltaX))
+    setSwipeOffset(newOffset)
+  }
+
+  function handleTouchEnd() {
+    setTransitioning(true)
+    if (swipeOffset < -(ACTION_WIDTH / 2)) {
+      setSwipeOffset(-ACTION_WIDTH)
+      onOpen()
+    } else {
+      setSwipeOffset(0)
+      onClose()
+    }
+  }
+
+  function handleClick() {
+    if (didMoveRef.current) return
+    if (isOpen) {
+      setTransitioning(true)
+      setSwipeOffset(0)
+      onClose()
       return
     }
-    setDeleting(true)
+    router.push(`/splits/${split.id}`)
+  }
+
+  async function handleArchive(e: React.MouseEvent) {
+    e.stopPropagation()
+    setBusy('archive')
+    try {
+      await archiveSplit(split.id)
+      onArchive(split.id)
+    } catch {
+      setBusy(null)
+      setTransitioning(true)
+      setSwipeOffset(0)
+      onClose()
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    setBusy('delete')
     try {
       await deleteSplit(split.id)
       onDelete(split.id)
     } catch {
-      setDeleting(false)
-      setConfirming(false)
+      setBusy(null)
+      setTransitioning(true)
+      setSwipeOffset(0)
+      onClose()
     }
   }
 
-  function handleCancelConfirm(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    setConfirming(false)
-  }
-
+  const count = split.attendees[0]?.count ?? 0
   const iconType = getSplitIcon(split.title)
   const gradient = getGradient(split.id)
+  const isArchived = split.status === 'archived'
 
   return (
-    <div className="relative">
-      <Link
-        href={`/splits/${split.id}`}
-        className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"
-      >
-        {/* Gradient icon tile */}
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-          style={{ background: gradient }}
+    <div className="relative overflow-hidden rounded-2xl">
+      {/* Action buttons revealed behind the card */}
+      <div className="absolute inset-y-0 right-0 flex" style={{ width: ACTION_WIDTH }}>
+        {/* Archive */}
+        <button
+          type="button"
+          onClick={handleArchive}
+          disabled={!!busy || isArchived}
+          className="flex w-20 flex-col items-center justify-center gap-0.5 bg-slate-500 text-white disabled:opacity-50"
+          aria-label={isArchived ? 'Already archived' : 'Archive split'}
         >
-          <SplitIconSvg type={iconType} />
-        </div>
+          {busy === 'archive' ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="animate-spin">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="21 8 21 21 3 21 3 8" />
+              <rect x="1" y="3" width="22" height="5" />
+              <line x1="10" y1="12" x2="14" y2="12" />
+            </svg>
+          )}
+          <span className="text-xs font-semibold">{busy === 'archive' ? '…' : isArchived ? 'Archived' : 'Archive'}</span>
+        </button>
 
-        {/* Text content */}
-        <div className="min-w-0 flex-1 pr-16">
-          <p className="truncate text-sm font-semibold text-gwfc-blue">{split.title}</p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            <ClientDate iso={split.created_at} />
-            {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
-          </p>
-        </div>
+        {/* Delete */}
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={!!busy}
+          className="flex w-20 flex-col items-center justify-center gap-0.5 bg-red-500 text-white disabled:opacity-50"
+          aria-label="Delete split"
+        >
+          {busy === 'delete' ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="animate-spin">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+            </svg>
+          )}
+          <span className="text-xs font-semibold">{busy === 'delete' ? '…' : 'Delete'}</span>
+        </button>
+      </div>
 
-        {/* Status pill */}
-        <div className="shrink-0">
-          <StatusBadge status={split.status} />
-        </div>
-      </Link>
-
-      {/* Delete controls */}
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-        {confirming && (
-          <>
-            <button
-              type="button"
-              onClick={handleCancelConfirm}
-              className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
-            >
-              {deleting ? 'Deleting…' : 'Confirm'}
-            </button>
-          </>
-        )}
-        {!confirming && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="rounded-lg p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500"
-            aria-label={`Delete ${split.title}`}
+      {/* Swipeable card */}
+      <div
+        className="relative rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 active:bg-slate-50 cursor-pointer select-none"
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: transitioning ? 'transform 0.2s ease-out' : 'none',
+          touchAction: 'pan-y',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && handleClick()}
+      >
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          {/* Gradient icon tile */}
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isArchived ? 'opacity-50' : ''}`}
+            style={{ background: gradient }}
           >
-            <TrashIcon />
-          </button>
-        )}
+            <SplitIconSvg type={iconType} />
+          </div>
+
+          {/* Text content */}
+          <div className="min-w-0 flex-1">
+            <p className={`truncate text-sm font-semibold ${isArchived ? 'text-slate-400' : 'text-gwfc-blue'}`}>
+              {split.title}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              <ClientDate iso={split.created_at} />
+              {count > 0 && ` · ${count} ${count === 1 ? 'person' : 'people'}`}
+            </p>
+          </div>
+
+          {/* Status badge */}
+          <div className="shrink-0">
+            <StatusBadge status={split.status} />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -206,9 +297,16 @@ function SplitItem({ split, onDelete }: { split: SplitWithCount; onDelete: (id: 
 
 export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }) {
   const [splits, setSplits] = useState(initialSplits)
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  function handleArchive(id: string) {
+    setSplits(prev => prev.map(s => s.id === id ? { ...s, status: 'archived' as const } : s))
+    setOpenId(null)
+  }
 
   function handleDelete(id: string) {
     setSplits(prev => prev.filter(s => s.id !== id))
+    setOpenId(null)
   }
 
   if (splits.length === 0) {
@@ -232,7 +330,15 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
   return (
     <div className="space-y-3">
       {splits.map(split => (
-        <SplitItem key={split.id} split={split} onDelete={handleDelete} />
+        <SplitItem
+          key={split.id}
+          split={split}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          isOpen={openId === split.id}
+          onOpen={() => setOpenId(split.id)}
+          onClose={() => { if (openId === split.id) setOpenId(null) }}
+        />
       ))}
     </div>
   )

@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type SplitStatus = 'pending' | 'draft' | 'finalised'
+export type SplitStatus = 'pending' | 'draft' | 'finalised' | 'archived'
 
 export interface Database {
   public: {
