@@ -12,28 +12,16 @@ export interface Attendee {
 }
 
 export async function createSplit(formData: FormData): Promise<string> {
-  console.log('createSplit: called')
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    console.log('createSplit: auth result —', { userId: user?.id ?? null, authError })
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
-    console.log('createSplit: authenticated as', user.id)
 
     const title    = formData.get('title') as string
     const groupId  = (formData.get('groupId') as string) || null
     const receipt  = formData.get('receipt') as File | null
     const attendees: Attendee[] = JSON.parse(formData.get('attendees') as string)
     const hasReceipt = receipt && receipt.size > 0
-
-    console.log('createSplit: inputs —', {
-      title,
-      groupId,
-      hasReceipt,
-      receiptType: receipt?.type ?? null,
-      receiptSize: receipt?.size ?? null,
-      attendeeCount: attendees.length,
-    })
 
     const { data: split, error: splitErr } = await supabase
       .from('splits')
@@ -50,7 +38,6 @@ export async function createSplit(formData: FormData): Promise<string> {
       console.error('createSplit: failed to insert split:', splitErr)
       throw new Error('Failed to create split')
     }
-    console.log('createSplit: split created', split.id)
 
     if (attendees.length > 0) {
       const { data: insertedAttendees, error: attendeesErr } = await supabase.from('attendees').insert(
@@ -63,8 +50,6 @@ export async function createSplit(formData: FormData): Promise<string> {
       ).select()
       if (attendeesErr) {
         console.error('createSplit: failed to insert attendees:', attendeesErr)
-      } else {
-        console.log('createSplit: attendees inserted', attendees.length)
       }
 
       // Auto-apply merge groups from the group template
@@ -98,7 +83,6 @@ export async function createSplit(formData: FormData): Promise<string> {
       const bytes = await receipt.arrayBuffer()
       const ext = receipt.type === 'image/png' ? 'png' : 'jpg'
       const storagePath = `${split.id}/receipt.${ext}`
-      console.log('createSplit: uploading receipt to', storagePath)
 
       const { error: uploadErr } = await supabase.storage
         .from('receipts')
@@ -110,20 +94,16 @@ export async function createSplit(formData: FormData): Promise<string> {
       if (uploadErr) {
         console.error('createSplit: failed to upload receipt to storage:', uploadErr)
       } else {
-        console.log('createSplit: receipt uploaded successfully')
         const { error: updateErr } = await supabase
           .from('splits')
           .update({ receipt_url: storagePath })
           .eq('id', split.id)
         if (updateErr) {
           console.error('createSplit: failed to update receipt_url on split:', updateErr)
-        } else {
-          console.log('createSplit: receipt_url saved to split')
         }
       }
     }
 
-    console.log('createSplit: complete, returning', split.id)
     return split.id
   } catch (err) {
     console.error('createSplit: unexpected error:', err)

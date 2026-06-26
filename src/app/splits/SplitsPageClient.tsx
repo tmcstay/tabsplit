@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { SplitList } from '../SplitList'
-import type { Tables } from '@/types/database'
+import type { Tables, SplitStatus } from '@/types/database'
 
 export type SplitWithPaid = Tables<'splits'> & { attendees: { paid: boolean }[] }
 
@@ -12,7 +12,8 @@ interface Props {
   splits: SplitWithPaid[]
 }
 
-export function SplitsPageClient({ splits }: Props) {
+export function SplitsPageClient({ splits: initialSplits }: Props) {
+  const [splits, setSplits] = useState<SplitWithPaid[]>(initialSplits)
   const [tab, setTab] = useState<Tab>('active')
 
   const allPaid = (s: SplitWithPaid) =>
@@ -23,6 +24,18 @@ export function SplitsPageClient({ splits }: Props) {
   )
   const completeSplits = splits.filter(s => s.status === 'finalised' && allPaid(s))
   const archivedSplits = splits.filter(s => s.status === 'archived')
+
+  function handleArchive(id: string) {
+    setSplits(prev => prev.map(s => s.id === id ? { ...s, status: 'archived' as SplitStatus } : s))
+  }
+
+  function handleRestore(id: string, newStatus: SplitStatus) {
+    setSplits(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s))
+  }
+
+  function handleDelete(id: string) {
+    setSplits(prev => prev.filter(s => s.id !== id))
+  }
 
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'active', label: 'Active', count: activeSplits.length },
@@ -55,15 +68,15 @@ export function SplitsPageClient({ splits }: Props) {
         ))}
       </div>
 
-      {/* Tab content — all rendered but hidden to preserve list state */}
+      {/* Tab content — all rendered but hidden to preserve swipe state */}
       <div className={tab !== 'active' ? 'hidden' : ''}>
-        <SplitList initialSplits={activeSplits} />
+        <SplitList splits={activeSplits} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} />
       </div>
       <div className={tab !== 'complete' ? 'hidden' : ''}>
-        <SplitList initialSplits={completeSplits} />
+        <SplitList splits={completeSplits} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} />
       </div>
       <div className={tab !== 'archived' ? 'hidden' : ''}>
-        <SplitList initialSplits={archivedSplits} />
+        <SplitList splits={archivedSplits} onArchive={handleArchive} onRestore={handleRestore} onDelete={handleDelete} />
       </div>
     </main>
   )

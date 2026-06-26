@@ -8,6 +8,7 @@ export interface GroupMember {
   display_name: string
   phone: string | null
   email: string | null
+  total: number
 }
 
 export interface ModalAttendee {
@@ -43,6 +44,7 @@ export function ShareWithEveryone({
   const [payidCopied, setPayidCopied] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [pickerAttendee, setPickerAttendee] = useState<ModalAttendee | null>(null)
+  const [pickerSelected, setPickerSelected] = useState<Set<number>>(new Set())
 
   async function copyPayid() {
     if (!organiserPayid) return
@@ -51,28 +53,40 @@ export function ShareWithEveryone({
     setTimeout(() => setPayidCopied(false), 2500)
   }
 
-  function buildMessage(displayName: string, total: number): string {
-    const firstName = displayName.split(' ')[0]
-    let msg = `Hey ${firstName}, here's your share of ${splitTitle}: $${total.toFixed(2)}.`
+  function buildMessage(displayName: string, total: number, isGroup: boolean, memberBreakdown?: GroupMember[]): string {
+    const greeting = isGroup ? displayName : displayName.split(' ')[0]
+    let msg = `Hey ${greeting}, here's your share of ${splitTitle}: $${total.toFixed(2)}.`
+    if (isGroup && memberBreakdown && memberBreakdown.length > 1) {
+      for (const m of memberBreakdown) {
+        msg += `\n${m.display_name}: $${m.total.toFixed(2)}`
+      }
+    }
     if (organiserPayid) {
       msg += `\nPay via PayID (${organiserPayidLabel ?? 'Other'}): ${organiserPayid}`
     }
     return msg
   }
 
-  async function doSend(displayName: string, phone: string | null, email: string | null, total: number, markId: string) {
+  async function doSend(
+    displayName: string,
+    phones: string[],
+    emails: string[],
+    total: number,
+    markId: string,
+    isGroup: boolean,
+    memberBreakdown?: GroupMember[]
+  ) {
     const url = `${window.location.origin}/share/${shareToken}`
-    const message = buildMessage(displayName, total)
-    const firstName = displayName.split(' ')[0]
+    const message = buildMessage(displayName, total, isGroup, memberBreakdown)
 
-    if (method === 'sms' && phone) {
+    if (method === 'sms' && phones.length > 0) {
       const encoded = encodeURIComponent(`${message}\n\nView full breakdown: ${url}`)
-      window.location.assign(`sms:${phone}?body=${encoded}`)
+      window.location.assign(`sms:${phones.join(',')}?body=${encoded}`)
       setSentIds(prev => new Set([...prev, markId]))
-    } else if (method === 'email' && email) {
+    } else if (method === 'email' && emails.length > 0) {
       const subject = encodeURIComponent(`${splitTitle} split`)
       const body = encodeURIComponent(`${message}\n\nView full breakdown: ${url}`)
-      window.location.assign(`mailto:${email}?subject=${subject}&body=${body}`)
+      window.location.assign(`mailto:${emails.join(',')}?subject=${subject}&body=${body}`)
       setSentIds(prev => new Set([...prev, markId]))
     } else {
       const result = await shareText({ title: splitTitle, text: message, url })
@@ -80,7 +94,7 @@ export function ShareWithEveryone({
         setSentIds(prev => new Set([...prev, markId]))
       } else if (result === 'copied') {
         setSentIds(prev => new Set([...prev, markId]))
-        setToast(`Copied ${firstName}'s message — paste it into your messaging app`)
+        setToast(`Copied ${displayName}'s message — paste it into your messaging app`)
         setTimeout(() => setToast(null), 4000)
       }
     }
@@ -93,21 +107,69 @@ export function ShareWithEveryone({
       return !!(m.phone || m.email)
     })
 
-    // Group with multiple contactable members — show picker
+    // Group with 2+ contactable members — show multi-select picker
     if (attendee.groupMembers.length > 0 && contactableMembers.length > 1) {
       setPickerAttendee(attendee)
+      // Pre-select all contactable members
+      setPickerSelected(new Set(
+        attendee.groupMembers
+          .map((m, i) => ({ m, i }))
+          .filter(({ m }) => method === 'sms' ? !!m.phone : method === 'email' ? !!m.email : !!(m.phone || m.email))
+          .map(({ i }) => i)
+      ))
       return
     }
 
-    // Group with one contactable member — send directly to them (use group label in message)
+    // Group with exactly one contactable member — send directly using group label
     if (attendee.groupMembers.length > 0 && contactableMembers.length === 1) {
       const m = contactableMembers[0]
-      await doSend(attendee.display_name, m.phone, m.email, attendee.total, attendee.id)
+      await doSend(
+        attendee.display_name,
+        m.phone ? [m.phone] : [],
+        m.email ? [m.email] : [],
+        attendee.total,
+        attendee.id,
+        true,
+        attendee.groupMembers
+      )
       return
     }
 
     // Individual attendee
-    await doSend(attendee.display_name, attendee.phone, attendee.email, attendee.total, attendee.id)
+    await doSend(
+      attendee.display_name,
+      attendee.phone ? [attendee.phone] : [],
+      attendee.email ? [attendee.email] : [],
+      attendee.total,
+      attendee.id,
+      false
+    )
+  }
+
+  async function handlePickerSend() {
+    if (!pickerAttendee) return
+    const selected = pickerAttendee.groupMembers.filter((_, i) => pickerSelected.has(i))
+    const phones = selected.map(m => m.phone).filter((p): p is string => !!p)
+    const emails = selected.map(m => m.email).filter((e): e is string => !!e)
+    await doSend(
+      pickerAttendee.display_name,
+      phones,
+      emails,
+      pickerAttendee.total,
+      pickerAttendee.id,
+      true,
+      pickerAttendee.groupMembers
+    )
+    setPickerAttendee(null)
+    setPickerSelected(new Set())
+  }
+
+  function togglePickerMember(i: number) {
+    setPickerSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
   }
 
   function resetAndClose() {
@@ -115,6 +177,7 @@ export function ShareWithEveryone({
     setSentIds(new Set())
     setToast(null)
     setPickerAttendee(null)
+    setPickerSelected(new Set())
   }
 
   const methodHint =
@@ -139,17 +202,17 @@ export function ShareWithEveryone({
         Share with everyone
       </button>
 
-      {/* Group member picker sub-sheet */}
+      {/* Group member multi-select picker sub-sheet */}
       {pickerAttendee && (
         <div className="fixed inset-0 z-[60] flex items-end">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setPickerAttendee(null)} />
+          <div className="fixed inset-0 bg-black/40" onClick={() => { setPickerAttendee(null); setPickerSelected(new Set()) }} />
           <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-gwfc-blue">Send to</p>
                 <p className="text-xs text-slate-400">{pickerAttendee.display_name}</p>
               </div>
-              <button type="button" onClick={() => setPickerAttendee(null)}
+              <button type="button" onClick={() => { setPickerAttendee(null); setPickerSelected(new Set()) }}
                 className="text-slate-400 hover:text-slate-600" aria-label="Close">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -159,28 +222,46 @@ export function ShareWithEveryone({
             </div>
             {pickerAttendee.groupMembers.map((m, i) => {
               const hasContact = method === 'sms' ? !!m.phone : method === 'email' ? !!m.email : !!(m.phone || m.email)
+              const checked = pickerSelected.has(i)
               return (
                 <button
                   key={i}
                   type="button"
                   disabled={!hasContact}
-                  onClick={async () => {
-                    await doSend(pickerAttendee.display_name, m.phone, m.email, pickerAttendee.total, pickerAttendee.id)
-                    setPickerAttendee(null)
-                  }}
-                  className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40"
+                  onClick={() => togglePickerMember(i)}
+                  className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40"
                 >
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gwfc-blue">{m.display_name}</p>
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                    checked ? 'border-teal-600 bg-teal-600' : 'border-slate-300 bg-white'
+                  }`}>
+                    {checked && (
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="truncate text-sm font-medium text-gwfc-blue">{m.display_name}</p>
                     <p className="text-xs text-slate-400">{m.phone ?? m.email ?? 'No contact info'}</p>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-                  </svg>
+                  <p className="shrink-0 text-sm font-semibold text-gwfc-blue">${m.total.toFixed(2)}</p>
                 </button>
               )
             })}
+            <div className="border-t border-slate-100 px-4 py-3">
+              <button
+                type="button"
+                onClick={handlePickerSend}
+                disabled={pickerSelected.size === 0}
+                className="w-full rounded-xl bg-gwfc-green py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {method === 'sms'
+                  ? `Send SMS${pickerSelected.size > 1 ? ' to group thread' : ''}`
+                  : method === 'email'
+                  ? `Send email${pickerSelected.size > 1 ? ' to both' : ''}`
+                  : 'Share'}
+              </button>
+            </div>
           </div>
         </div>
       )}

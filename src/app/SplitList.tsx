@@ -307,42 +307,39 @@ function SplitItem({
   )
 }
 
-export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }) {
-  const [splits, setSplits] = useState(initialSplits)
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+          stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" />
+          <path d="M9 7h6M9 11h6M9 15h4" />
+        </svg>
+      </div>
+      <p className="text-base font-semibold text-gwfc-blue">No splits yet</p>
+      <p className="mt-1.5 max-w-xs text-sm text-slate-400">
+        Tap the + button to get started.
+      </p>
+    </div>
+  )
+}
+
+// Controlled list — parent owns the splits state and mutation callbacks
+export function SplitList({
+  splits,
+  onArchive,
+  onRestore,
+  onDelete,
+}: {
+  splits: SplitWithCount[]
+  onArchive: (id: string) => void
+  onRestore: (id: string, status: SplitStatus) => void
+  onDelete: (id: string) => void
+}) {
   const [openId, setOpenId] = useState<string | null>(null)
 
-  function handleArchive(id: string) {
-    setSplits(prev => prev.filter(s => s.id !== id))
-    setOpenId(null)
-  }
-
-  function handleRestore(id: string, _status: SplitStatus) {
-    setSplits(prev => prev.filter(s => s.id !== id))
-    setOpenId(null)
-  }
-
-  function handleDelete(id: string) {
-    setSplits(prev => prev.filter(s => s.id !== id))
-    setOpenId(null)
-  }
-
-  if (splits.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-            stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="5" y="2" width="14" height="20" rx="2" />
-            <path d="M9 7h6M9 11h6M9 15h4" />
-          </svg>
-        </div>
-        <p className="text-base font-semibold text-gwfc-blue">No splits yet</p>
-        <p className="mt-1.5 max-w-xs text-sm text-slate-400">
-          Tap the + button to get started.
-        </p>
-      </div>
-    )
-  }
+  if (splits.length === 0) return <EmptyState />
 
   return (
     <div className="space-y-3">
@@ -350,14 +347,28 @@ export function SplitList({ initialSplits }: { initialSplits: SplitWithCount[] }
         <SplitItem
           key={split.id}
           split={split}
-          onArchive={handleArchive}
-          onRestore={handleRestore}
-          onDelete={handleDelete}
+          onArchive={id => { onArchive(id); setOpenId(null) }}
+          onRestore={(id, status) => { onRestore(id, status); setOpenId(null) }}
+          onDelete={id => { onDelete(id); setOpenId(null) }}
           isOpen={openId === split.id}
           onOpen={() => setOpenId(split.id)}
           onClose={() => { if (openId === split.id) setOpenId(null) }}
         />
       ))}
     </div>
+  )
+}
+
+// Self-contained stateful wrapper — used by the home page where no cross-list sync is needed
+export function SplitListWithState({ initialSplits }: { initialSplits: SplitWithCount[] }) {
+  const [splits, setSplits] = useState(initialSplits)
+
+  return (
+    <SplitList
+      splits={splits}
+      onArchive={id => setSplits(prev => prev.filter(s => s.id !== id))}
+      onRestore={id => setSplits(prev => prev.filter(s => s.id !== id))}
+      onDelete={id => setSplits(prev => prev.filter(s => s.id !== id))}
+    />
   )
 }

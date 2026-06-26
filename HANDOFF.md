@@ -1,152 +1,136 @@
 # TabSplit — Session Handoff
 
 ## Session Date
-2026-06-24 (session 4)
+2026-06-26 (session 6)
 
 ## Completed This Session
 
-### GitHub Packages Auth in .npmrc
-- Added `//npm.pkg.github.com/:_authToken=${NPM_GITHUB_TOKEN}` to `.npmrc`
-- npm natively expands `${}` in `.npmrc` files — this is correct and intentional (unlike `package.json` dependency strings which do NOT expand env vars)
-- `NPM_GITHUB_TOKEN` must be set in Vercel env vars and Codemagic `npm_auth` variable group for builds to authenticate against GitHub Packages
+### Debug Log Cleanup
+- Removed all `console.log` calls from `src/app/splits/new/actions.ts` (10 removed); `console.error` calls retained for legitimate error reporting
+- `NewSplitForm.tsx` was already clean — logs had been removed prior to this session
+- Safari receipt detection confirmed working on device; `handleFileChange` name-based fallback behaves correctly
 
-### iOS Build Number Auto-Increment
-- Added "Increment build number" step to `codemagic.yaml` between Capacitor sync and code signing
-- Uses `agvtool new-version -all $PROJECT_BUILD_NUMBER` — Codemagic's built-in `$PROJECT_BUILD_NUMBER` auto-increments every build
-- First attempt used `app-store-connect get-latest-build-number` which failed silently (build showed Version code: 1); replaced with `$PROJECT_BUILD_NUMBER`
-- `CURRENT_PROJECT_VERSION` is hardcoded to `1` in `project.pbxproj` (lines 299 and 321, Debug + Release) — `agvtool` overrides this at build time
+### CLAUDE.md Documentation Update
+- Added 5 previously undocumented migrations to the Migrations section:
+  - `20260625000000` — merge_group_id / merge_label on group_members
+  - `20260625010000` — 'archived' added to splits status constraint
+  - `20260625020000` — phone / email added to attendee_groups
+  - `20260625030000` — attendees.paid boolean
+  - `20260625040000` — favourite_contacts table + RLS
+- Replaced two `*(untracked)*` entries with proper migration IDs
+- Updated `group_members` schema description to include merge columns
+- Updated `attendee_groups` schema description to include phone/email columns
+- Updated Split Status Flow section to include `archived` as a fourth state
 
-### Git Push Credential Fix
-- Git had no credential helper configured; `git push` was failing with "could not read Username"
-- Fix: `git -c credential.helper=manager push origin main` — uses Windows Credential Manager (GCM) which has stored GitHub credentials
-- Previous sessions were using this same pattern; no permanent fix was applied
-
-### CLAUDE.md History Audit
-Reviewed the original Claude.ai chat transcript to find gaps between what was built and what was documented. Fixes applied:
-
-- **Migrations section** — added 4 missing entries: `000000` (initial schema), `000001` (user trigger), `000002` (groups + pending status), `20260623120000` (PayID/payid_label + organiser public read policy)
-- **`users` table** — added `payid` and `payid_label` to column list
-- **Auth Flow** — expanded to describe Login/Sign-up tab structure, `signInWithPassword`/`signUp`, password show/hide toggle, friendly error mapping, forgot password flow; flagged that `/reset-password` page does not yet exist (forgot-password links to it → 404)
-- **Project Structure** — added `src/app/_components/` entry
-- **Key Components** — added `BottomNav.tsx` section
-
-**Key gap found: `/reset-password` page is missing** — `forgot-password/page.tsx` sends a reset email with `redirectTo: .../reset-password` but that route has never been built. Anyone who clicks "Forgot password?" will hit a 404 after the reset email.
+### Status Updates (reported by Tony)
+- Codemagic build confirmed successful
+- `NPM_GITHUB_TOKEN` set in both Vercel and Codemagic
+- PWA PNG icons generated
+- End-to-end mobile test in progress
 
 ---
 
-## Bugs / Issues Encountered
+## Previous Session — Completed (Session 5, 2026-06-25)
 
-| Issue | Root Cause | Resolution |
-|-------|-----------|------------|
-| Build still showed Version code: 1 after increment step | `app-store-connect get-latest-build-number` failed silently or returned wrong value | Replaced with `$PROJECT_BUILD_NUMBER` — Codemagic built-in, always increments |
-| `git push` failing with "could not read Username" | No credential helper configured in git global/system config | Use `git -c credential.helper=manager push origin main` to invoke Windows GCM |
-| `npx cap sync` failed: `android/app/src/main/assets/` missing | Directory not created during initial Capacitor Android setup | `New-Item -ItemType Directory -Force` then re-ran cap sync |
-| SPM version conflict: `capacitor-swift-pm 8.4.0` vs `<8.0.0` | `@capacitor-community/contacts@7.2.0` needs SPM `7.x`; Capacitor 8.x ships `8.x` | Downgraded all Capacitor packages to `7.6.6` |
-| Codemagic CocoaPods step failing — no Podfile | Capacitor 6+/7+ uses SPM exclusively; `cap sync` never generates a Podfile | Removed CocoaPods step from codemagic.yaml entirely |
-| `--workspace` build arg invalid — `App.xcworkspace` doesn't exist | `.xcworkspace` is generated by CocoaPods; without CocoaPods it doesn't exist | Switched to `--project "ios/App/App.xcodeproj"` |
-| `git add -f` didn't add new untracked files in gitignored `/ios` dir | `-f` only overrides gitignore for already-tracked files | Used `git update-index --add` for new untracked files (App.xcscheme) |
-| PowerShell `cat <<'EOF'` heredoc syntax error on `git commit` | `<<'EOF'` is bash syntax; PowerShell uses `@'...'@` | Switched to Git Bash tool for all commits using bash heredoc |
-| `discount_attendees` fetched without knowing discount IDs yet | First attempt put it in the same `Promise.all` as discounts with a placeholder | Rewrote all three pages to two-phase fetch: discounts first, then discount_attendees |
+### Splits Page — Three-Tab View (Active / Complete / Archived)
+- New `SplitsPageClient` component classifies all splits into three tabs
+- **Active**: `pending`, `draft`, or `finalised` where not all attendees have paid
+- **Complete**: `finalised` AND `attendees.length > 0 && attendees.every(a => a.paid)`
+- **Archived**: `status === 'archived'`
+- Uses hidden-div approach to preserve swipe state across tab switches
+- Changed Supabase query from `attendees(count)` to `attendees(paid)` — returns real records array; count via `.length`
+- Tab badge shows count; archive/restore removes item from current tab list immediately (handled via filter, not status update)
+
+### Home Page — Active Only
+- Home page query changed from `in('status', ['pending', 'draft'])` to also include `finalised`
+- Filters client-side to show only active splits (same logic as SplitsPageClient)
+- Finalised + all-paid splits no longer appear on the home page
+
+### Favourites Feature — Complete
+- Star button added to attendee rows on all four attendee-adding screens: NewSplitForm step 2, NewGroupForm step 2, GroupDetail existing + new member rows, PersonCard results page
+- Star position: LEFT of name (`[★] [name flex-1] [×]`), moved from between name and × button
+- `favMap` pattern: `Map<display_name.toLowerCase().trim(), favourite_contacts.id>` with optimistic toggle (temp ID → real ID)
+- PersonCard results page: star button in card header, always visible for non-group entries (not buried in expanded row)
+- Groups page now has **Favourites tab** alongside Groups tab:
+  - Lists existing favourites with remove (×) button
+  - "From contacts" button (indigo) → `ContactPicker` on native, message on web
+  - "From group" button (teal) → `GroupPicker` sheet → then `ContactPicker` with group members
+  - "Add manually" form: name + optional phone + optional email
+  - All additions optimistic
+- Groups query updated from `group_members(count)` to `group_members(id, display_name, phone, email)` to support member picker
+- `GroupWithMembers` type exported from `GroupsPageClient.tsx`; `groups/page.tsx` imports it
+
+### Type Safety Fix — Cross-File SplitWithCount
+- Vercel build failed with "Two different types with the same name exist, but they are unrelated" for `SplitWithCount`
+- Root cause: `page.tsx` and `SplitList.tsx` each defined their own local `SplitWithCount`; TypeScript treats them as different nominal types even when structurally identical
+- Fix: export `SplitWithCount` from `SplitList.tsx`; export `SplitWithPaid` from `SplitsPageClient.tsx`; import at all call sites instead of redefining
 
 ---
 
 ## Next Steps (Pick Up From Here)
 
-1. **Set `NPM_GITHUB_TOKEN` in Vercel and Codemagic** — required for `npm ci` to pull `@tmcstay/gwfc-brand` from GitHub Packages:
-   - Vercel: Settings → Environment Variables → add `NPM_GITHUB_TOKEN` (all environments)
-   - Codemagic: Project settings → Environment variables → `npm_auth` group → add `NPM_GITHUB_TOKEN`
-   - Token needs `read:packages` scope on GitHub
+1. **Complete end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, apply a discount, add tip, finalise, verify share link shows discount lines, tap Edit to reopen; also test favourites star toggle and Favourites tab import flows. Report any bugs.
 
-2. **Trigger Codemagic build and check logs** — go to Codemagic dashboard, start a build on the `ios-workflow` workflow. Most likely remaining failure points:
-   - `NPM_GITHUB_TOKEN` not yet set in `npm_auth` group → `npm ci` fails on `@tmcstay/gwfc-brand`
-   - Signing variables not set in `ios_signing_manual` group (`CM_CERTIFICATE`, `CM_CERTIFICATE_PASSWORD`, `CM_PROVISIONING_PROFILE`)
-   - `xcode-project use-profiles` fails if provisioning profile UUID doesn't match bundle ID `app.tabsplit.com`
-   - Verify build number step shows a value > 1 in the logs
+2. **Build `/reset-password` page** — `forgot-password/page.tsx` calls `resetPasswordForEmail` with `redirectTo: .../reset-password`; that route doesn't exist (currently 404 after clicking reset email link). Needs to:
+   - Handle the Supabase `type=recovery` session (Supabase sets the session automatically from the URL token on load)
+   - Show password + confirm password fields
+   - Call `supabase.auth.updateUser({ password })` on submit
+   - Redirect to `/` on success
 
-3. **Confirm Safari receipt detection** — open the deployed Vercel app on an iPhone, go to New Split → Step 3, select a photo. Check Eruda console for:
-   - `handleFileChange: { name, size, type, lastModified }` — should show the file
-   - `setReceipt called with: [filename] [size]` — should show the file
+3. **Remove Eruda from production** — Eruda debug console loads on all `*.vercel.app` URLs including the production alias. Once debugging is complete, restrict to non-production preview URLs or remove entirely. Currently in `layout.tsx` behind hostname check.
 
-4. **Remove debug console.logs from NewSplitForm** — once Safari receipt detection confirmed:
-   - `NewSplitForm.tsx` line ~37: `console.log('NewSplitForm render ...')`
-   - `NewSplitForm.tsx` line ~68: `console.log('handleFileChange:', ...)`
-   - `NewSplitForm.tsx` line ~72: `console.log('setReceipt called with:', ...)`
-   - `NewSplitForm.tsx` line ~79: `console.log('handleSubmit fired')`
-   - Also check `splits/new/actions.ts` for console.logs in `createSplit`
-
-5. **Generate PWA PNG icons** — `public/icons/icon-192.png` and `public/icons/icon-512.png` still need generating from `public/icons/icon.svg`
-
-6. **Full end-to-end mobile test** — create a split, upload receipt, run OCR, assign items, apply a discount, add tip, finalise, verify share link shows discount lines, tap Edit to reopen
+4. **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure. Low priority until Android build is needed.
 
 ---
 
 ## Open Questions / Decisions to Revisit
 
-- **`/reset-password` page missing** — `forgot-password/page.tsx` calls `resetPasswordForEmail` with `redirectTo: .../reset-password`; that page doesn't exist. Build it before shipping. Needs to handle the Supabase `type=recovery` session and call `updateUser({ password })`.
+- **`/reset-password` page missing** — `forgot-password/page.tsx` sends a reset email with `redirectTo: .../reset-password`; that page doesn't exist → 404. Build it before shipping.
 
-- **Codemagic build** — hasn't succeeded yet; `NPM_GITHUB_TOKEN` and signing variables still need confirming in Codemagic project settings
-
-- **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure; should be `app/tabsplit/com/` to match new bundle ID. Not addressed — Android Studio concern, low priority until Android build is needed
-
-- **Eruda in production** — Eruda loads on ALL `*.vercel.app` URLs including the production alias. Once debugging is complete, restrict to non-production preview URLs or remove entirely.
-
-- **Contacts on PWA** — "Import from contacts" button is visible on the web PWA but shows a "native only" message. Decide whether to hide it entirely on web or keep it visible to signal the feature exists for native.
+- **Contacts on PWA** — "From contacts" / "Import from contacts" buttons are visible on web PWA but show a "native only" message. Decide whether to hide them entirely on web or keep them to signal the feature exists for native users.
 
 - **OCR multi-line parsing accuracy** — real-world receipt accuracy hasn't been confirmed. Strategy 1 in `route.ts` handles price-on-next-line but needs testing on actual receipts.
 
 - **PWA install prompt** — PWA manifest and service worker set up but install UX not tested. iOS requires manual "Add to Home Screen"; Android may show a banner.
 
+- **Eruda in production** — Eruda loads on ALL `*.vercel.app` URLs including the production alias. Restrict or remove once debugging is complete.
+
+- **Android bundle ID** — `android/app/src/main/java/com/tabsplit/app/` uses old package structure; should be `app/tabsplit/com/` to match `app.tabsplit.com`. Low priority.
+
 ---
 
 ## Previous Sessions Summary
 
+### Session 5 (2026-06-25)
+- Splits page three-tab view (Active / Complete / Archived) with hidden-div swipe state preservation
+- Home page active-only filter (pending + draft + finalised-unpaid)
+- Favourites feature complete across all four attendee screens + Favourites tab on Groups page
+- Type safety fix for SplitWithCount / SplitWithPaid cross-file nominal type conflict
+
+### Session 4 (2026-06-24)
+- GitHub Packages auth in `.npmrc` — `${NPM_GITHUB_TOKEN}` pattern
+- iOS build number auto-increment via `$PROJECT_BUILD_NUMBER` in codemagic.yaml
+- CLAUDE.md history audit — filled in 4 missing migrations, auth flow details, BottomNav docs, flagged missing `/reset-password` page
+- Favourites feature groundwork: `favourite_contacts` table, star buttons on attendee screens
+- Group share message fix: was using group label instead of individual member name
+- Groups page Favourites tab: initial implementation
+
 ### Session 3 (2026-06-19)
-
-#### Capacitor Native Build Setup
-- `appId` → `app.tabsplit.com`, `server.url` → Vercel, Capacitor downgraded to 7.6.6 (SPM conflict), Info.plist usage keys confirmed, App.xcscheme confirmed tracked
-
-#### Codemagic (`codemagic.yaml`) — new file
-- `ios-workflow`: mac_mini_m2, SPM (no CocoaPods), manual signing, `xcode-project build-ipa`, TestFlight publish
-
-#### Discount Feature
-- DB tables: `discounts`, `discount_attendees` (migration 20240101000004)
-- Server actions: `applyDiscount`, `removeDiscount`
-- SplitDetail bottom sheet, emerald chips, results/share page calculation
-
-#### gwfc-brand Dependency
-- Switched from git+https URL to GitHub Packages registry (`^1.0.0`), `.npmrc` configured with `@tmcstay` scope
+- Capacitor native build setup (server.url → Vercel, bundle ID app.tabsplit.com, downgraded to 7.6.6)
+- Codemagic yaml written (ios-workflow, SPM, manual signing, TestFlight publish)
+- Discount feature (DB tables, server actions, SplitDetail bottom sheet, results/share page)
+- gwfc-brand switched from git+https to GitHub Packages registry
 
 ### Session 2 (2026-06-19)
-
-#### Colour Scheme — Full Ocean Palette (zinc → slate/teal)
-Applied across all 21 UI files.
-
-#### App Fee Host Derivation
-Removed host selector dropdown; host auto-derived from `split.organiser_id`.
-
-#### Contacts Import with Email
-Added to all three attendee-adding flows; fixed missing `requestPermissions()` call.
-
-#### Results Page — Collapsible Cards + Edit Button
-`PersonCard.tsx`, `EditButton.tsx`, `unfinaliseSplit` action.
-
-#### Home Page — Commit SHA
-`process.env.VERCEL_GIT_COMMIT_SHA` shown as 7-char monospace text.
+- Full ocean colour palette (zinc → slate/teal) across 21 UI files
+- App fee host auto-derivation (removed dropdown)
+- Contacts import with email across all three attendee-adding flows
+- Results page collapsible cards + Edit button
+- Home page commit SHA display
 
 ### Session 1 (2026-06-18 / 2026-06-19)
-
-#### Security & Stability
-- Next.js 15.3.3 → 15.3.9 (security CVE patch)
-- `crypto.randomUUID()` polyfill via `generateId()` in `src/lib/uuid.ts`
-- Server actions body size limit raised to 10MB
-
-#### Bug Fixes
-- Hydration error on mobile — `ClientDate` component
-- Safari file input detection — name-based fallback when `size === 0`
-- OCR error visibility — added `visionStatus` / `visionStatusText` to error response
-
-#### UI / Features
-- Step 3 button redesign — "Load file" (indigo) and "Create Split" (emerald)
-- Add Charge feature — tip, app fee, service charge, custom
-- Removed raw OCR debug panels
-- Eruda mobile console, viewport fixes
+- Next.js 15.3.3 → 15.3.9 security patch
+- `generateId()` polyfill for Safari `crypto.randomUUID()`
+- Server actions body size limit 10MB
+- Hydration error fix (ClientDate), Safari file input detection, OCR error visibility
+- Step 3 button redesign ("Load file" / "Create Split"), Add Charge feature, Eruda console, viewport fixes

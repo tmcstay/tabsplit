@@ -207,6 +207,7 @@ export default async function SplitResultsPage({
           display_name: m.display_name,
           phone: m.phone ?? null,
           email: m.email ?? null,
+          total: acc[m.id]?.total ?? 0,
         })),
       }
     }),

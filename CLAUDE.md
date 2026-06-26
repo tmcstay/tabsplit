@@ -51,12 +51,13 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 | themeColor | `#0f172a` (slate-900) |
 
 **Preserved colours** (do not change these):
-- `amber` — unassigned item warnings
+- `amber` — unassigned item warnings; **also** favourites star icon (`text-amber-400` filled, `text-slate-300` unfilled) and "Add to favourites" button (`bg-amber-500`)
 - `green` / `emerald` — finalised status, Finalise button, Create Split button, discount lines
 - `red` — errors, delete actions
 - `violet` — Assign button
 - `sky` — Equal button
-- `indigo` — Load file button
+- `indigo` — Load file button; also "From contacts" import button on Favourites tab
+- `teal` (50/100 bg) — "From group" import button on Favourites tab
 
 ## Auth Flow
 - Email + password (`signInWithPassword` / `signUp`)
@@ -70,15 +71,16 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 ### Tables
 - `users` — auth users with display_name, phone, payid, payid_label
 - `groups` — saved collections of people the organiser splits with regularly; `saved` boolean (default false) indicates whether the organiser has chosen to keep the group for future use
-- `group_members` — individual people within a group; each has a display_name, optional phone, optional email, and optional link to a user account
+- `group_members` — individual people within a group; each has a display_name, optional phone, optional email, optional link to a user account, and optional `merge_group_id` / `merge_label` for pre-configured merge pairs (e.g. couples)
 - `splits` — a dining event with receipt, organiser, status, and optional `group_id` linking back to the group it was created from
-- `attendees` — people in a split, linked to optional user account; has optional email field
-- `attendee_groups` — merged attendees within a split (e.g. couples paying together)
+- `attendees` — people in a split, linked to optional user account; has optional email field; `paid boolean` (default false) tracks whether each attendee has paid their share
+- `attendee_groups` — merged attendees within a split (e.g. couples paying together); has optional `phone` and `email` columns for the nominated group contact when sending share messages
 - `items` — individual line items exploded from receipt (no quantity field — one row per unit)
 - `item_assignments` — which attendee owns which item
 - `share_links` — tokenised public links for non-authenticated viewing
 - `discounts` — percentage or flat discounts applied to selected attendees; columns: id, split_id, type ('percentage'|'flat'), value numeric(10,2), created_at
 - `discount_attendees` — which attendees a discount applies to; columns: id, discount_id, attendee_id; cascade-deletes when discount is removed
+- `favourite_contacts` — saved contacts for quick reuse; columns: id, user_id, display_name, phone (nullable), email (nullable), created_at; RLS: owner read/write only
 
 ### Migrations
 - `20240101000000` — initial schema: all core tables (users, splits, attendee_groups, attendees, items, item_assignments, share_links), RLS policies, receipts storage bucket
@@ -87,14 +89,20 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - `20240101000003` — adds email (nullable) to group_members and attendees tables
 - `20240101000004` — adds discounts and discount_attendees tables with RLS
 - `20260623120000` — adds payid and payid_label (nullable) to users; adds public read policy for organiser profile when a share link exists for their split
+- `20260625000000` — adds merge_group_id (uuid) and merge_label (text) to group_members; enables pre-configured merge pairs in saved groups
+- `20260625010000` — adds 'archived' to splits status check constraint (pending | draft | finalised | archived)
+- `20260625020000` — adds phone and email columns to attendee_groups; stores nominated contact for group share messages
+- `20260625030000` — adds `paid boolean not null default false` to attendees
+- `20260625040000` — adds `favourite_contacts` table with RLS (owner read/write only)
 
 ### Split Status Flow
-Splits move through three states in order:
+Splits move through these states:
 1. `pending` — group has been set, but no bill uploaded yet (default status on creation)
 2. `draft` — bill uploaded and items are being assigned to attendees
 3. `finalised` — assignments locked, each person can see their total via share link
+4. `archived` — removed from active view; shown in Archived tab on Splits page
 
-Splits can be moved back from `finalised` → `draft` via the Edit button on the results page (`unfinaliseSplit` action deletes the share_link row and resets status).
+Splits can be moved back from `finalised` → `draft` via the Edit button on the results page (`unfinaliseSplit` action deletes the share_link row and resets status). Archive/restore is handled via swipe-to-reveal actions on SplitList.
 
 ## RLS Notes
 - splits table had infinite recursion in public read policy — fixed by extracting a security definer function `split_has_share_link(split_id uuid)` that checks share_links without recursion
@@ -181,22 +189,60 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 
 ### NewSplitForm (`src/app/splits/new/NewSplitForm.tsx`)
 - 3-step form: title → attendees → receipt
-- Step 2 attendees: name + phone + email fields; "Import from contacts" button
+- Step 2 attendees: name + phone + email fields; "Import from contacts" button; star button on each attendee row (left of name)
 - Step 3 has two distinct buttons: "Load file" (indigo, triggers file picker) and "Create Split" (emerald, submits) — they swap based on receipt state
 - `handleFileChange`: accepts files with size=0 if they have a name (Safari returns zero-size Files)
 - Debug console.logs still present — remove once Safari file detection confirmed working
+- Star buttons use `favMap` (keyed by `display_name.toLowerCase().trim()`) with optimistic updates; temp ID replaced by real after server action
 
 ### Results Page (`src/app/splits/[id]/results/`)
 - `page.tsx` — server component; fetches split data (discounts + discount_attendees in two-phase query), renders PersonCard list and header buttons
-- `PersonCard.tsx` — **client component**; collapsible card showing person name + total; tap to expand item breakdown with chevron animation; default collapsed; shows emerald discount lines when expanded
+- `PersonCard.tsx` — **client component**; collapsible card showing person name + total; tap to expand item breakdown with chevron animation; default collapsed; shows emerald discount lines when expanded; star (favourite) button always visible in card header (right side, after expand chevron) for non-group entries; Mark paid + Resend buttons in expanded row
 - `EditButton.tsx` — **client component**; calls `unfinaliseSplit` then `router.push(/splits/${id})` to reopen the split for editing
 - `ShareButton.tsx` — **client component**; uses `navigator.share` or clipboard copy
 
+### Favourite Star Button Pattern
+Used in four places: NewSplitForm step 2, NewGroupForm step 2, GroupDetail edit mode, PersonCard on results page.
+
+Attendee row layout: `[★ star] [name/contact flex-1] [× delete]` — star is always LEFT of name, far from the delete button.
+
+```typescript
+// favMap: Map<display_name.toLowerCase().trim(), favourite_contacts.id>
+// Optimistic toggle: add temp ID immediately, replace with real ID after server action
+// On error: roll back
+async function handleToggleFav(name, phone, email) { ... }
+function starBtn(name, phone, email) { ... } // returns amber filled / slate outline button
+```
+
+Server actions: `addFavourite(name, phone, email): Promise<string>` (returns real ID), `removeFavourite(id): Promise<void>` — both in `src/app/favourites/actions.ts`
+
 ### SplitList (`src/app/SplitList.tsx`)
 - `ClientDate` component defers `Intl.DateTimeFormat` to client via `useEffect` — avoids SSR/client timezone hydration mismatch
+- Exports `SplitWithCount` type (`Tables<'splits'> & { attendees: { paid: boolean }[] }`) — must be imported at call sites to avoid cross-file type mismatch errors on Vercel
+- Swipe-to-reveal: Archive/Restore (slate/teal) and Delete (red) action buttons
+
+### SplitsPageClient (`src/app/splits/SplitsPageClient.tsx`)
+- Client component for the Splits page; receives all splits and classifies them into three tabs
+- Exports `SplitWithPaid` type — must be imported in `splits/page.tsx` (same cross-file type rule)
+- **Active**: `pending`, `draft`, or `finalised` where not all attendees have paid
+- **Complete**: `finalised` AND all attendees paid (`attendees.length > 0 && attendees.every(a => a.paid)`)
+- **Archived**: `status === 'archived'`
+- Uses hidden-div approach (all three `SplitList` instances mounted simultaneously, toggled with `hidden` class) to preserve swipe state across tab switches
+
+### GroupsPageClient (`src/app/groups/GroupsPageClient.tsx`)
+- Client component for the Groups page; Groups/Favourites tab switcher
+- **Groups tab**: lists saved groups (GroupCard → `/groups/[id]`), "New Group" button at bottom
+- **Favourites tab**:
+  - Lists `FavouriteCard` entries (amber star icon, × remove button with optimistic delete)
+  - "From contacts" button (indigo) — opens `ContactPicker` on native; shows "native only" message on web
+  - "From group" button (teal) — opens `GroupPicker` sheet listing saved groups; tapping a group loads its members into `ContactPicker` for multi-select; hidden if no saved groups
+  - "Add manually" form — name + optional phone + optional email + amber "Add to favourites" button
+  - All additions are optimistic (temp ID replaced by real ID after server action)
+- `GroupWithMembers` type exported: `Tables<'groups'> & { group_members: GroupMember[] }` — query fetches `group_members(id, display_name, phone, email)` (not count)
+- `GroupPicker` — inline bottom sheet component; shows each group's member count and how many are already saved
 
 ## Contacts Import
-Available in three places: NewSplitForm step 2, NewGroupForm step 2, GroupDetail edit mode.
+Available in four places: NewSplitForm step 2, NewGroupForm step 2, GroupDetail edit mode, GroupsPageClient Favourites tab.
 
 Pattern used in all three:
 ```typescript
@@ -301,11 +347,16 @@ Pattern used in all three:
 - Item assignment UI complete (assign, assign-by-line, equal split, merge attendees)
 - Extra charges complete (tip with % shortcuts, app fee with auto host derivation, service, custom)
 - Discounts complete (percentage and flat, per-attendee, shown on results + share pages)
-- Results page complete (collapsible per-person cards, discount lines, edit button to reopen split, share button)
+- Results page complete (collapsible per-person cards, discount lines, edit button to reopen split, share button, star/favourite button on each person)
 - Public share page complete (with discount lines)
+- Favourites complete: `favourite_contacts` table, star toggle on all attendee-adding screens (left of name), Favourites tab on Groups page with from-contacts + from-group pickers + manual add form
+- Splits page tabbed view complete: Active / Complete (all paid) / Archived tabs; `SplitsPageClient` with hidden-div approach
+- Home page shows only active splits (pending/draft + finalised-unpaid); excludes completed/archived
 - Capacitor configured: server.url → Vercel, bundle ID app.tabsplit.com, Info.plist usage keys set, SPM scheme file present, all packages at 7.6.6
 - Codemagic yaml written — build not yet confirmed successful
 - `.npmrc` configured with GitHub Packages registry + `NPM_GITHUB_TOKEN` auth
 - iOS build number auto-increment via `$PROJECT_BUILD_NUMBER` in codemagic.yaml
 - Deployed to Vercel at https://tabsplit-three.vercel.app
-- Next: trigger Codemagic build and verify, remove debug logs from NewSplitForm once Safari confirmed, generate PWA PNG icons, full end-to-end mobile test
+- Debug console.logs removed from `splits/new/actions.ts` (Safari receipt detection confirmed working)
+- Codemagic build confirmed; `NPM_GITHUB_TOKEN` set in Vercel and Codemagic; PWA PNG icons generated
+- Next: full end-to-end mobile test; build `/reset-password` page (currently 404 after forgot-password email); remove Eruda from production once debugging complete

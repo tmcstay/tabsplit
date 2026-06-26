@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { SplitList, type SplitWithCount } from './SplitList'
+import { SplitListWithState, type SplitWithCount } from './SplitList'
 type OpenSplitWithItems = { id: string; items: Array<{ price: number }> | null }
 
 const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null
@@ -85,7 +85,7 @@ export default async function HomePage() {
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent Splits
           </h2>
-          <SplitList initialSplits={activeSplits} />
+          <SplitListWithState initialSplits={activeSplits} />
         </section>
       </main>
     </div>
