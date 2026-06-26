@@ -81,7 +81,10 @@ export function ShareWithEveryone({
 
     if (method === 'sms' && phones.length > 0) {
       const encoded = encodeURIComponent(`${message}\n\nView full breakdown: ${url}`)
-      window.location.assign(`sms:${phones.join(',')}?body=${encoded}`)
+      const smsUrl = phones.length === 1
+        ? `sms:${phones[0]}?body=${encoded}`
+        : `sms://open?addresses=${phones.join(',')}&body=${encoded}`
+      window.location.assign(smsUrl)
       setSentIds(prev => new Set([...prev, markId]))
     } else if (method === 'email' && emails.length > 0) {
       const subject = encodeURIComponent(`${splitTitle} split`)
