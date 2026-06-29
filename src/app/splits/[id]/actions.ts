@@ -236,6 +236,34 @@ export async function markPaid(
   }
 }
 
+export async function updateLineItem(
+  itemId: string,
+  description: string,
+  price: number,
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase
+    .from('items')
+    .update({ description, price })
+    .eq('id', itemId)
+
+  if (error) throw new Error('Failed to update item.')
+}
+
+export async function deleteLineItem(itemId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  await supabase.from('item_assignments').delete().eq('item_id', itemId)
+
+  const { error } = await supabase.from('items').delete().eq('id', itemId)
+  if (error) throw new Error('Failed to delete item.')
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
-import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee } from './actions'
+import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee, updateLineItem, deleteLineItem } from './actions'
 
 interface Props {
   split: Tables<'splits'>
@@ -130,6 +130,21 @@ export function SplitDetail({
   const [discountType, setDiscountType] = useState<'percentage' | 'flat'>('percentage')
   const [discountValue, setDiscountValue] = useState('')
   const [discountAttendeeIds, setDiscountAttendeeIds] = useState<string[]>([])
+
+  // Edit item modal
+  const [editItemId, setEditItemId] = useState<string | null>(null)
+  const [editItemDesc, setEditItemDesc] = useState('')
+  const [editItemPrice, setEditItemPrice] = useState('')
+  const [editItemError, setEditItemError] = useState<string | null>(null)
+
+  // Delete item confirmation
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
+
+  // Add item modal
+  const [showAddItem, setShowAddItem] = useState(false)
+  const [addItemDesc, setAddItemDesc] = useState('')
+  const [addItemPrice, setAddItemPrice] = useState('')
+  const [addItemError, setAddItemError] = useState<string | null>(null)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -534,6 +549,70 @@ export function SplitDetail({
     }
   }
 
+  // ── Edit line item ───────────────────────────────────────────────────────────
+
+  function openEditItem(item: Tables<'items'>) {
+    setEditItemId(item.id)
+    setEditItemDesc(item.description)
+    setEditItemPrice(item.price.toFixed(2))
+    setEditItemError(null)
+  }
+
+  async function handleSaveItem() {
+    if (!editItemId || !editItemDesc.trim()) return
+    const price = Math.round(parseFloat(editItemPrice) * 100) / 100
+    if (isNaN(price) || price <= 0) return
+    setBusy(true)
+    setEditItemError(null)
+    try {
+      await updateLineItem(editItemId, editItemDesc.trim(), price)
+      setEditItemId(null)
+      router.refresh()
+    } catch {
+      setEditItemError('Failed to update item.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── Delete line item ─────────────────────────────────────────────────────────
+
+  async function handleDeleteItem() {
+    if (!deleteItemId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteLineItem(deleteItemId)
+      setDeleteItemId(null)
+      router.refresh()
+    } catch {
+      setError('Failed to remove item.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── Add line item (manual) ───────────────────────────────────────────────────
+
+  async function handleAddItem() {
+    if (!addItemDesc.trim()) return
+    const price = Math.round(parseFloat(addItemPrice) * 100) / 100
+    if (isNaN(price) || price <= 0) return
+    setBusy(true)
+    setAddItemError(null)
+    try {
+      await addLineItem(split.id, addItemDesc.trim(), price, [], items.length + 1)
+      setShowAddItem(false)
+      setAddItemDesc('')
+      setAddItemPrice('')
+      router.refresh()
+    } catch {
+      setAddItemError('Failed to add item.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleUnmerge(groupId: string) {
     setBusy(true)
     setError(null)
@@ -856,7 +935,18 @@ export function SplitDetail({
                         <p className="mt-0.5 text-xs text-amber-600">Unassigned</p>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEditItem(item)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="Edit item"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
                       <span className="text-sm font-semibold text-gwfc-blue">{fmt(item.price)}</span>
                       <button
                         type="button"
@@ -869,12 +959,36 @@ export function SplitDetail({
                       >
                         {isAssigned ? 'Edit' : 'Assign'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteItemId(item.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
+                        aria-label="Remove item"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </li>
               )
             })}
           </ul>
+
+          <button
+            type="button"
+            onClick={() => { setShowAddItem(true); setAddItemDesc(''); setAddItemPrice(''); setAddItemError(null) }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 py-3 text-sm font-medium text-slate-500 hover:border-teal-400 hover:text-teal-600"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add item
+          </button>
         </div>
       </main>
 
@@ -1434,6 +1548,148 @@ export function SplitDetail({
                   !chargeAmount || parseFloat(chargeAmount) <= 0 ||
                   (chargeType === 'custom' && !chargeDesc.trim()) || busy
                 }
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {busy ? 'Adding…' : 'Add to bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit item bottom sheet ──────────────────────────────────────────── */}
+      {editItemId && (() => {
+        const editItem = items.find(i => i.id === editItemId)
+        if (!editItem) return null
+        return (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <div className="fixed inset-0 bg-black/40" onClick={() => setEditItemId(null)} />
+            <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
+              <div className="border-b border-slate-100 px-4 py-4">
+                <p className="text-sm font-semibold text-gwfc-blue">Edit item</p>
+                <p className="mt-0.5 text-xs text-slate-400">Update the description or amount for this item.</p>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {editItemError && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{editItemError}</p>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
+                  <input
+                    type="text"
+                    value={editItemDesc}
+                    onChange={e => setEditItemDesc(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Amount</label>
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500">
+                    <span className="text-sm font-medium text-slate-400">$</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={editItemPrice}
+                      onChange={e => setEditItemPrice(e.target.value)}
+                      className="flex-1 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 outline-none"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveItem}
+                  disabled={!editItemDesc.trim() || !editItemPrice || parseFloat(editItemPrice) <= 0 || busy}
+                  className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {busy ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Delete item confirmation sheet ───────────────────────────────────── */}
+      {deleteItemId && (() => {
+        const deleteItem = items.find(i => i.id === deleteItemId)
+        if (!deleteItem) return null
+        return (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <div className="fixed inset-0 bg-black/40" onClick={() => setDeleteItemId(null)} />
+            <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
+              <div className="border-b border-slate-100 px-4 py-4">
+                <p className="text-sm font-semibold text-gwfc-blue">Remove item</p>
+              </div>
+              <div className="px-4 py-4">
+                <p className="text-sm text-slate-600">
+                  Remove <span className="font-semibold text-gwfc-blue">{deleteItem.description}</span> ({fmt(deleteItem.price)}) from the bill?
+                </p>
+                <p className="mt-1 text-xs text-slate-400">Any assignments for this item will also be removed.</p>
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteItemId(null)}
+                    className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteItem}
+                    disabled={busy}
+                    className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40"
+                  >
+                    {busy ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Add item bottom sheet ────────────────────────────────────────────── */}
+      {showAddItem && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowAddItem(false)} />
+          <div className="relative w-full rounded-t-2xl bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-4 py-4">
+              <p className="text-sm font-semibold text-gwfc-blue">Add item</p>
+              <p className="mt-0.5 text-xs text-slate-400">Manually add a line item. It will appear as unassigned.</p>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              {addItemError && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{addItemError}</p>
+              )}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sparkling water"
+                  value={addItemDesc}
+                  onChange={e => setAddItemDesc(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Amount</label>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500">
+                  <span className="text-sm font-medium text-slate-400">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={addItemPrice}
+                    onChange={e => setAddItemPrice(e.target.value)}
+                    className="flex-1 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 outline-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                disabled={!addItemDesc.trim() || !addItemPrice || parseFloat(addItemPrice) <= 0 || busy}
                 className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
                 {busy ? 'Adding…' : 'Add to bill'}
