@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     console.warn('OCR: Vision API returned no text. Full response:', JSON.stringify(visionData))
   }
 
-  const { items, total } = parseReceiptText(text)
+  const { items, total, subtotal, rawLines, excluded } = parseReceiptText(text)
 
-  return NextResponse.json({ items, total, rawText: text })
+  return NextResponse.json({ items, total, subtotal, rawLines, excluded, rawText: text })
 }

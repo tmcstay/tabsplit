@@ -106,6 +106,7 @@ export interface Database {
           title: string
           receipt_url: string | null
           total: number | null
+          subtotal: number | null
           status: SplitStatus
           created_at: string
         }
@@ -116,6 +117,7 @@ export interface Database {
           title: string
           receipt_url?: string | null
           total?: number | null
+          subtotal?: number | null
           status?: SplitStatus
           created_at?: string
         }
@@ -126,6 +128,7 @@ export interface Database {
           title?: string
           receipt_url?: string | null
           total?: number | null
+          subtotal?: number | null
           status?: SplitStatus
           created_at?: string
         }

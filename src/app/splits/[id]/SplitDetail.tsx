@@ -146,6 +146,15 @@ export function SplitDetail({
   const [addItemPrice, setAddItemPrice] = useState('')
   const [addItemError, setAddItemError] = useState<string | null>(null)
 
+  // OCR data and active tab
+  const [ocrData, setOcrData] = useState<{
+    rawLines: string[]
+    excluded: string[]
+    subtotal: number | null
+    total: number | null
+  } | null>(null)
+  const [activeTab, setActiveTab] = useState<'assign' | 'ocr'>('assign')
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAssignments(
@@ -153,13 +162,17 @@ export function SplitDetail({
     )
   }, [items, initialAssignments])
 
-  const subtotal = items.reduce((sum, item) => sum + item.price, 0)
+  const itemsSum = items.reduce((sum, item) => sum + item.price, 0)
   const allAssigned = items.length > 0 && items.every(i => (assignments[i.id] ?? []).length > 0)
   const totalAssigned = items.reduce(
     (sum, item) => ((assignments[item.id] ?? []).length > 0 ? sum + item.price : sum),
     0
   )
   const unassignedCount = items.filter(i => !(assignments[i.id] ?? []).length).length
+
+  const receiptSubtotal = split.subtotal
+  const sumDiff = receiptSubtotal !== null ? Math.round((itemsSum - receiptSubtotal) * 100) / 100 : null
+  const sumMatchesSubtotal = sumDiff !== null && Math.abs(sumDiff) < 0.02
 
   // The organiser is always the host for app fee purposes
   const hostAttendee = attendees.find(a => a.user_id === split.organiser_id) ?? null
@@ -191,12 +204,14 @@ export function SplitDetail({
         body: JSON.stringify({ image: base64 }),
       })
       if (!ocrRes.ok) throw new Error()
-      const { items: ocrItems, total } = await ocrRes.json()
+      const { items: ocrItems, total, subtotal, rawLines, excluded } = await ocrRes.json()
       if (!ocrItems?.length) {
         setError('No items detected in the receipt. Try again or contact support.')
         return
       }
-      await saveItems(split.id, ocrItems, total)
+      setOcrData({ rawLines: rawLines ?? [], excluded: excluded ?? [], subtotal: subtotal ?? null, total: total ?? null })
+      setActiveTab('assign')
+      await saveItems(split.id, ocrItems, total, subtotal)
       router.refresh()
     } catch {
       setError('Failed to scan receipt. Please try again.')
@@ -774,22 +789,50 @@ export function SplitDetail({
             </button>
           </div>
         </div>
+
+        {/* Summary row */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className="text-slate-500">
+            Assigned: <span className="font-semibold text-gwfc-blue">{fmt(totalAssigned)}</span>
+          </span>
+          {unassignedCount > 0 && (
+            <span className="font-medium text-amber-600">{unassignedCount} unassigned</span>
+          )}
+          {receiptSubtotal !== null && (
+            <span className={`font-medium ${sumMatchesSubtotal ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {sumMatchesSubtotal
+                ? '✓ matches receipt'
+                : `⚠ ${fmt(Math.abs(sumDiff!))} ${sumDiff! > 0 ? 'over' : 'under'} receipt`}
+            </span>
+          )}
+        </div>
+
+        {/* Tab switcher */}
+        <div className="mt-2.5 flex gap-1 rounded-lg bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('assign')}
+            className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+              activeTab === 'assign' ? 'bg-white text-gwfc-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Assign
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('ocr')}
+            className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+              activeTab === 'ocr' ? 'bg-white text-gwfc-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            OCR data
+          </button>
+        </div>
       </header>
 
-      <main className="space-y-4 px-4 py-4 pb-32">
+      <main className="space-y-4 px-4 py-4 pb-24">
+        {activeTab === 'assign' && (
         <div className="space-y-4">
-          {signedReceiptUrl && (
-            <button
-              type="button"
-              onClick={() => setShowReceiptFull(true)}
-              className="block w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-slate-200"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={signedReceiptUrl} alt="Receipt" className="max-h-28 w-full object-cover" />
-              <p className="bg-slate-50 py-1.5 text-center text-xs text-slate-400">Tap to view full receipt</p>
-            </button>
-          )}
-
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -990,26 +1033,79 @@ export function SplitDetail({
             Add item
           </button>
         </div>
-      </main>
+        )}
 
-      {/* Summary bar */}
-      <div className="fixed inset-x-0 border-t border-slate-200 bg-white px-4 py-2.5" style={{ bottom: 'calc(4rem + max(env(safe-area-inset-bottom), 12px))' }}>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500">
-            Assigned: <span className="font-semibold text-gwfc-blue">{fmt(totalAssigned)}</span>
-          </span>
-          {split.total != null && (
-            <span className="text-slate-500">
-              Total: <span className="font-semibold text-gwfc-blue">{fmt(split.total)}</span>
-            </span>
-          )}
-          {unassignedCount > 0 && (
-            <span className="text-xs font-medium text-amber-600">
-              {unassignedCount} unassigned
-            </span>
-          )}
-        </div>
-      </div>
+        {activeTab === 'ocr' && (
+          <div className="space-y-4">
+            {ocrData ? (
+              <>
+                <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Detected from receipt</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Subtotal</span>
+                      <span className="text-sm font-semibold text-gwfc-blue">
+                        {ocrData.subtotal !== null ? fmt(ocrData.subtotal) : 'Not detected'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Total</span>
+                      <span className="text-sm font-semibold text-gwfc-blue">
+                        {ocrData.total !== null ? fmt(ocrData.total) : 'Not detected'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {ocrData.excluded.length > 0 && (
+                  <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Skipped lines ({ocrData.excluded.length})
+                    </p>
+                    <div className="space-y-1">
+                      {ocrData.excluded.map((line, i) => (
+                        <p key={i} className="text-xs text-slate-400 line-through">{line}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Raw OCR text ({ocrData.rawLines.length} lines)
+                  </p>
+                  <div className="space-y-0.5 font-mono">
+                    {ocrData.rawLines.map((line, i) => (
+                      <p key={i} className="text-xs text-slate-600">{line}</p>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-sm text-slate-400">Scan the receipt to see OCR data here.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {signedReceiptUrl && (
+          <button
+            type="button"
+            onClick={() => setShowReceiptFull(true)}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18M9 21V9" />
+            </svg>
+            <span className="flex-1 text-left text-sm text-slate-600">View full receipt</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400" aria-hidden="true">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        )}
+      </main>
 
       {/* Receipt full-size overlay */}
       {showReceiptFull && signedReceiptUrl && (
@@ -1427,15 +1523,15 @@ export function SplitDetail({
               )}
 
               {/* Tip percentage shortcuts */}
-              {chargeType === 'tip' && subtotal > 0 && (
+              {chargeType === 'tip' && itemsSum > 0 && (
                 <div>
-                  <p className="mb-2 text-xs text-slate-400">Bill subtotal: {fmt(subtotal)}</p>
+                  <p className="mb-2 text-xs text-slate-400">Bill subtotal: {fmt(itemsSum)}</p>
                   <div className="flex gap-2">
                     {[10, 15, 18, 20].map(pct => (
                       <button
                         key={pct}
                         type="button"
-                        onClick={() => setChargeAmount((Math.round(subtotal * pct) / 100).toFixed(2))}
+                        onClick={() => setChargeAmount((Math.round(itemsSum * pct) / 100).toFixed(2))}
                         className="flex-1 rounded-lg bg-slate-100 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200"
                       >
                         {pct}%

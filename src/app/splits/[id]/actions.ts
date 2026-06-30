@@ -12,7 +12,8 @@ interface ItemInput {
 export async function saveItems(
   splitId: string,
   items: ItemInput[],
-  total?: number | null
+  total?: number | null,
+  subtotal?: number | null,
 ): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,8 +29,9 @@ export async function saveItems(
   )
   if (error) throw new Error('Failed to save items.')
 
-  const updatePayload: { status: 'draft'; total?: number } = { status: 'draft' }
+  const updatePayload: { status: 'draft'; total?: number; subtotal?: number } = { status: 'draft' }
   if (total != null) updatePayload.total = total
+  if (subtotal != null) updatePayload.subtotal = subtotal
   await supabase.from('splits').update(updatePayload).eq('id', splitId)
 }
 
