@@ -179,6 +179,7 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 - Handles both states: no-items-yet (scan receipt) and item assignment UI
 - Header action buttons: Assign (violet, opens assign-by-line sheet), Equal (sky), Finalise (emerald when all assigned / slate when not)
 - Inline content buttons: "Merge attendees", "Add charge", "Apply discount"
+- `defaultMergeLabel(ids)` auto-generates merge label as "Justin M and Tony M" (first name + surname initial if available, "and" not "&"); user can override before saving
 - Add Charge bottom sheet with tip shortcuts and app fee payment mode logic
 - Apply Discount bottom sheet: type toggle, value input, attendee multi-select, applied discount chips with remove
 - **App fee host**: derived from `attendees.find(a => a.user_id === split.organiser_id)` — no dropdown; shows static display of host name or "Host not listed as an attendee"
@@ -191,8 +192,7 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 - 3-step form: title → attendees → receipt
 - Step 2 attendees: name + phone + email fields; "Import from contacts" button; star button on each attendee row (left of name)
 - Step 3 has two distinct buttons: "Load file" (indigo, triggers file picker) and "Create Split" (emerald, submits) — they swap based on receipt state
-- `handleFileChange`: accepts files with size=0 if they have a name (Safari returns zero-size Files)
-- Debug console.logs still present — remove once Safari file detection confirmed working
+- `handleFileChange`: accepts files with size=0 if they have a name (Safari returns zero-size Files); confirmed working on device
 - Star buttons use `favMap` (keyed by `display_name.toLowerCase().trim()`) with optimistic updates; temp ID replaced by real after server action
 
 ### Results Page (`src/app/splits/[id]/results/`)
@@ -220,14 +220,28 @@ Server actions: `addFavourite(name, phone, email): Promise<string>` (returns rea
 - `ClientDate` component defers `Intl.DateTimeFormat` to client via `useEffect` — avoids SSR/client timezone hydration mismatch
 - Exports `SplitWithCount` type (`Tables<'splits'> & { attendees: { paid: boolean }[] }`) — must be imported at call sites to avoid cross-file type mismatch errors on Vercel
 - Swipe-to-reveal: Archive/Restore (slate/teal) and Delete (red) action buttons
+- **Architecture**: two exports:
+  - `SplitList` — controlled; receives `splits` + `onArchive`, `onRestore`, `onDelete` callbacks; owns only swipe `openId` state
+  - `SplitListWithState` — stateful wrapper used by the home page; holds its own `useState(initialSplits)` and handles mutations locally
 
 ### SplitsPageClient (`src/app/splits/SplitsPageClient.tsx`)
-- Client component for the Splits page; receives all splits and classifies them into three tabs
+- Client component for the Splits page; receives all splits from server, holds master `useState<SplitWithPaid[]>` and derives three filtered lists
 - Exports `SplitWithPaid` type — must be imported in `splits/page.tsx` (same cross-file type rule)
 - **Active**: `pending`, `draft`, or `finalised` where not all attendees have paid
 - **Complete**: `finalised` AND all attendees paid (`attendees.length > 0 && attendees.every(a => a.paid)`)
 - **Archived**: `status === 'archived'`
 - Uses hidden-div approach (all three `SplitList` instances mounted simultaneously, toggled with `hidden` class) to preserve swipe state across tab switches
+- Archive/restore/delete mutations update master state → all three tabs re-derive immediately (no navigation needed)
+
+### ShareWithEveryone (`src/app/splits/[id]/results/ShareWithEveryone.tsx`)
+- "Share with everyone" bottom sheet; Link / Email / SMS method switcher
+- `GroupMember` interface: `{ display_name, phone, email, total }` — `total` is the individual's share within the group
+- `buildMessage(displayName, total, isGroup, memberBreakdown?)`:
+  - Groups: greeting uses full group label (e.g. "Hey Justin M and Tony M"); includes per-member breakdown lines
+  - Individuals: greeting uses first name only (`displayName.split(' ')[0]`)
+- Multi-select picker for merged groups with 2+ contactable members: teal checkboxes, all pre-selected, per-member amount shown; "Send SMS to group thread" / "Send email to both" button
+- Multi-recipient SMS: single → `sms:${phone}?body=...`; multiple → `sms://open?addresses=${phones.join(',')}&body=...` (iOS group thread)
+- Multi-recipient email: `mailto:${emails.join(',')}?subject=...&body=...`
 
 ### GroupsPageClient (`src/app/groups/GroupsPageClient.tsx`)
 - Client component for the Groups page; Groups/Favourites tab switcher
@@ -272,7 +286,7 @@ Pattern used in all three:
 - `src/lib/uuid.ts` — `generateId()` polyfills `crypto.randomUUID()` for older Safari
 - `layout.tsx` viewport: `maximumScale: 1` (prevents iOS zoom on input focus), `viewportFit: 'cover'` (notch/safe area)
 - `html`: `h-dvh` (dynamic viewport height), `body`: `h-full overflow-y-auto overscroll-none`
-- Eruda mobile console injected via `next/script` (afterInteractive) when hostname ≠ localhost or includes vercel.app — shows floating debug console on device
+- Eruda mobile debug console — floating icon bottom-right, visible on all builds. Installed as `eruda` npm package. `src/lib/debug.ts` exports `initEruda()` (skips if `NEXT_PUBLIC_ENABLE_ERUDA=false`). `src/components/ErudaInit.tsx` is a `'use client'` component that calls it in a `useEffect`, mounted from `layout.tsx`. **ON by default** — set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before any public/production release.
 - PWA manifest at `/public/manifest.json`; icons at `/public/icons/icon-192.png`, `/public/icons/icon-512.png` (PNGs still need generating from icon.svg)
 - Server actions body size limit: 10MB (`next.config.ts` experimental.serverActions.bodySizeLimit)
 
@@ -357,6 +371,10 @@ Pattern used in all three:
 - `.npmrc` configured with GitHub Packages registry + `NPM_GITHUB_TOKEN` auth
 - iOS build number auto-increment via `$PROJECT_BUILD_NUMBER` in codemagic.yaml
 - Deployed to Vercel at https://tabsplit-three.vercel.app
-- Debug console.logs removed from `splits/new/actions.ts` (Safari receipt detection confirmed working)
+- Debug console.logs removed from `splits/new/actions.ts`; Safari receipt detection confirmed working on device
 - Codemagic build confirmed; `NPM_GITHUB_TOKEN` set in Vercel and Codemagic; PWA PNG icons generated
-- Next: full end-to-end mobile test; build `/reset-password` page (currently 404 after forgot-password email); remove Eruda from production once debugging complete
+- Archive/restore now reflects immediately across all tabs (lifted state into SplitsPageClient)
+- Share SMS/email: groups get full label greeting + per-member breakdown; individuals get first name only
+- Merge label format updated to "Justin M and Tony M" (first name + surname initial, "and" not "&")
+- Multi-select picker for group SMS/email; multi-recipient via sms://open?addresses= and mailto:
+- Next: confirm multi-recipient group SMS works on device; build `/reset-password` page (currently 404 after forgot-password email); set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before public/production release

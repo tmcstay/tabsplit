@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { BottomNav } from './_components/BottomNav'
+import { ErudaInit } from '@/components/ErudaInit'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className="h-full overflow-y-auto overscroll-none bg-slate-50 font-sans text-gwfc-blue">
         {children}
         <BottomNav />
+        <ErudaInit />
       </body>
     </html>
   )
