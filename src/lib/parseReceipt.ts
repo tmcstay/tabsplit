@@ -3,43 +3,92 @@ export interface LineItem {
   price: number
 }
 
+export type FieldResult =
+  | { status: 'found'; value: number }
+  | { status: 'blank' }
+  | { status: 'not_found' }
+
+export interface ReceiptFields {
+  subtotal: FieldResult
+  totalExTax: FieldResult
+  gst: FieldResult
+  totalIncTax: FieldResult
+  toPay: FieldResult
+  tip: FieldResult
+  total: FieldResult
+}
+
 export interface ParseResult {
   items: LineItem[]
   total: number | null
   subtotal: number | null
   rawLines: string[]
   excluded: string[]
+  fields: ReceiptFields
+}
+
+// Module-level so detectField can access them
+const priceRe = /\$?([\d,]+\.\d{2})/g
+const priceOnlyRe = /^\$?[\d,]+\.\d{2}$/
+
+/**
+ * Detect a single receipt field by label regex, with lookahead.
+ * - Same-line price: label and value on one line (e.g. "Subtotal $113.00")
+ * - Next-line price: label then value-only line (e.g. "Subtotal:\n$113.00")
+ * - Returns 'blank' if label found but no price in lookahead window
+ * - Returns 'not_found' if label never appears
+ */
+function detectField(rawLines: string[], labelRe: RegExp, maxLook = 2): FieldResult {
+  for (let i = 0; i < rawLines.length; i++) {
+    if (!labelRe.test(rawLines[i])) continue
+
+    // Check same line for a price
+    const samePrices = [...rawLines[i].matchAll(priceRe)]
+    if (samePrices.length > 0) {
+      const amt = parseFloat(samePrices[samePrices.length - 1][1].replace(',', ''))
+      if (!isNaN(amt)) return { status: 'found', value: amt }
+    }
+
+    // Look ahead for a price-only line (no intervening text lines)
+    for (let j = i + 1; j <= Math.min(i + maxLook, rawLines.length - 1); j++) {
+      if (priceOnlyRe.test(rawLines[j])) {
+        const amt = parseFloat(rawLines[j].replace(/[$,]/g, ''))
+        if (!isNaN(amt)) return { status: 'found', value: amt }
+      }
+      // Any real text line between label and value means the value is absent
+      if (rawLines[j].length > 3) break
+    }
+
+    return { status: 'blank' }
+  }
+  return { status: 'not_found' }
+}
+
+function fieldValue(f: FieldResult): number | null {
+  return f.status === 'found' ? f.value : null
 }
 
 export function parseReceiptText(text: string): ParseResult {
   const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean)
   const items: LineItem[] = []
-  let total: number | null = null
-  let subtotal: number | null = null
   const excluded: string[] = []
 
-  // Any dollar amount anywhere in a line
-  const priceRe = /\$?([\d,]+\.\d{2})/g
-  // A line that is *only* a price — nothing else
-  const priceOnlyRe = /^\$?[\d,]+\.\d{2}$/
   // Quantity prefix at line start
   const qtyXRe = /^(\d+)\s*[xX×]\s+/
   const qtyWordRe = /^(\d+)\s+(?=[A-Za-z])/
 
   // Lines that are never item descriptions.
-  // \btip\b prevents the customer-fillable tip line from borrowing a price.
   const skipRe = /total|subtotal|gst|tax|inc\b|cash|eftpos|change|invoice|table\b|order\b|served|powered|www\.|receipt|@|\bcard\b|\btip\b|prices shown|abn\b|\bmethod\b|balance|surcharge/i
 
   const junkRe = /^[\d\s\W]{0,6}$/
 
   // ── Determine item zone ──────────────────────────────────────────────────────
-  // Only parse lines that appear between the "Description" header and the first
-  // "Subtotal" line.  Nothing below Subtotal is ever a line item.
+  // Only parse lines between the "Description" header and the first "Subtotal" line.
   const descHeaderRe = /^description\b/i
   const subtotalLineRe = /\bsubtotal\b/i
 
-  let zoneStart = 0     // first line to consider (inclusive)
-  let zoneEnd = rawLines.length  // last line to consider (exclusive)
+  let zoneStart = 0
+  let zoneEnd = rawLines.length
 
   for (let i = 0; i < rawLines.length; i++) {
     if (descHeaderRe.test(rawLines[i])) { zoneStart = i + 1; break }
@@ -112,24 +161,21 @@ export function parseReceiptText(text: string): ParseResult {
     pushItem(descRaw, price)
   }
 
-  // ── Extract subtotal and total (search all rawLines) ─────────────────────────
+  // ── Detect receipt fields (all rawLines, with same-line + lookahead) ─────────
 
-  for (const line of rawLines) {
-    if (!subtotalLineRe.test(line)) continue
-    const prices = [...line.matchAll(priceRe)]
-    if (!prices.length) continue
-    const amt = parseFloat(prices[prices.length - 1][1].replace(',', ''))
-    if (!isNaN(amt) && amt > 0) { subtotal = amt; break }
+  const fields: ReceiptFields = {
+    subtotal:    detectField(rawLines, /\bsubtotal\b/i),
+    totalExTax:  detectField(rawLines, /\btotal\b.*\bex(?:cl(?:uding)?)?\b/i),
+    gst:         detectField(rawLines, /^\s*gst\b/i),
+    totalIncTax: detectField(rawLines, /\btotal\b.*\binc(?:l(?:uding)?)?\b/i),
+    toPay:       detectField(rawLines, /\bto\s*pay\b|\bamount\s+due\b|\bamount\s+payable\b|\bbalance\s+due\b/i),
+    tip:         detectField(rawLines, /^\s*tip\b/i),
+    total:       detectField(rawLines, /^\s*total\s*:?\s*$/i),
   }
 
-  const totalRe = /total|amount due|amount payable|balance due|to pay/i
-  for (const line of rawLines) {
-    if (!totalRe.test(line)) continue
-    const prices = [...line.matchAll(priceRe)]
-    if (!prices.length) continue
-    const amt = parseFloat(prices[prices.length - 1][1].replace(',', ''))
-    if (!isNaN(amt) && amt > 0 && (total === null || amt > total)) total = amt
-  }
+  // Backward-compatible derived values
+  const subtotal = fieldValue(fields.subtotal) ?? fieldValue(fields.totalExTax) ?? null
+  const total = fieldValue(fields.totalIncTax) ?? fieldValue(fields.toPay) ?? fieldValue(fields.total) ?? null
 
   // ── Infer tip from totals difference (never from a blank Tip: label) ─────────
 
@@ -146,5 +192,5 @@ export function parseReceiptText(text: string): ParseResult {
     }
   }
 
-  return { items, total, subtotal, rawLines, excluded }
+  return { items, total, subtotal, rawLines, excluded, fields }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
+import type { ReceiptFields } from '@/lib/parseReceipt'
 import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee, updateLineItem, deleteLineItem } from './actions'
 
 interface Props {
@@ -152,6 +153,7 @@ export function SplitDetail({
     excluded: string[]
     subtotal: number | null
     total: number | null
+    fields: ReceiptFields
   } | null>(null)
   const [activeTab, setActiveTab] = useState<'assign' | 'ocr'>('assign')
 
@@ -170,9 +172,9 @@ export function SplitDetail({
   )
   const unassignedCount = items.filter(i => !(assignments[i.id] ?? []).length).length
 
-  const receiptSubtotal = split.subtotal
-  const sumDiff = receiptSubtotal !== null ? Math.round((itemsSum - receiptSubtotal) * 100) / 100 : null
-  const sumMatchesSubtotal = sumDiff !== null && Math.abs(sumDiff) < 0.02
+  const receiptTotal = split.subtotal ?? split.total
+  const itemsVsReceiptDiff = receiptTotal !== null ? Math.round((itemsSum - receiptTotal) * 100) / 100 : null
+  const itemsMatchReceipt = itemsVsReceiptDiff !== null && Math.abs(itemsVsReceiptDiff) < 0.02
 
   // The organiser is always the host for app fee purposes
   const hostAttendee = attendees.find(a => a.user_id === split.organiser_id) ?? null
@@ -204,12 +206,12 @@ export function SplitDetail({
         body: JSON.stringify({ image: base64 }),
       })
       if (!ocrRes.ok) throw new Error()
-      const { items: ocrItems, total, subtotal, rawLines, excluded } = await ocrRes.json()
+      const { items: ocrItems, total, subtotal, rawLines, excluded, fields } = await ocrRes.json()
       if (!ocrItems?.length) {
         setError('No items detected in the receipt. Try again or contact support.')
         return
       }
-      setOcrData({ rawLines: rawLines ?? [], excluded: excluded ?? [], subtotal: subtotal ?? null, total: total ?? null })
+      setOcrData({ rawLines: rawLines ?? [], excluded: excluded ?? [], subtotal: subtotal ?? null, total: total ?? null, fields: fields ?? null })
       setActiveTab('assign')
       await saveItems(split.id, ocrItems, total, subtotal)
       router.refresh()
@@ -798,13 +800,6 @@ export function SplitDetail({
           {unassignedCount > 0 && (
             <span className="font-medium text-amber-600">{unassignedCount} unassigned</span>
           )}
-          {receiptSubtotal !== null && (
-            <span className={`font-medium ${sumMatchesSubtotal ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {sumMatchesSubtotal
-                ? '✓ matches receipt'
-                : `⚠ ${fmt(Math.abs(sumDiff!))} ${sumDiff! > 0 ? 'over' : 'under'} receipt`}
-            </span>
-          )}
         </div>
 
         {/* Tab switcher */}
@@ -833,6 +828,43 @@ export function SplitDetail({
       <main className="space-y-4 px-4 py-4 pb-24">
         {activeTab === 'assign' && (
         <div className="space-y-4">
+
+          {/* Receipt total vs items sum */}
+          {(receiptTotal !== null || itemsSum > 0) && (
+            <div className={`rounded-2xl px-4 py-3 ring-1 ${
+              itemsVsReceiptDiff === null ? 'bg-white ring-slate-200' :
+              itemsMatchReceipt ? 'bg-emerald-50 ring-emerald-200' : 'bg-amber-50 ring-amber-200'
+            }`}>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Receipt total</p>
+                  <p className="text-xl font-bold text-gwfc-blue">
+                    {receiptTotal !== null ? fmt(receiptTotal) : '—'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">Items sum</p>
+                  <p className="text-xl font-bold text-gwfc-blue">{fmt(itemsSum)}</p>
+                </div>
+              </div>
+              {itemsVsReceiptDiff !== null && (
+                <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${itemsMatchReceipt ? 'text-emerald-600' : 'text-amber-700'}`}>
+                  {itemsMatchReceipt ? (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                      Items match total
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      {fmt(Math.abs(itemsVsReceiptDiff))} {itemsVsReceiptDiff > 0 ? 'over' : 'short of'} total
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -1040,20 +1072,28 @@ export function SplitDetail({
             {ocrData ? (
               <>
                 <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Detected from receipt</p>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Subtotal</span>
-                      <span className="text-sm font-semibold text-gwfc-blue">
-                        {ocrData.subtotal !== null ? fmt(ocrData.subtotal) : 'Not detected'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Total</span>
-                      <span className="text-sm font-semibold text-gwfc-blue">
-                        {ocrData.total !== null ? fmt(ocrData.total) : 'Not detected'}
-                      </span>
-                    </div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Detected fields</p>
+                  <div className="space-y-2.5">
+                    {ocrData.fields && ([
+                      { label: 'Subtotal',      field: ocrData.fields.subtotal },
+                      { label: 'Total ex tax',  field: ocrData.fields.totalExTax },
+                      { label: 'GST',           field: ocrData.fields.gst },
+                      { label: 'Total Inc Tax', field: ocrData.fields.totalIncTax },
+                      { label: 'To pay',        field: ocrData.fields.toPay },
+                      { label: 'Tip',           field: ocrData.fields.tip },
+                      { label: 'Total',         field: ocrData.fields.total },
+                    ] as const).map(({ label, field }) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-slate-500">{label}</span>
+                        {field.status === 'found' ? (
+                          <span className="text-sm font-semibold text-gwfc-blue">{fmt(field.value)}</span>
+                        ) : field.status === 'blank' ? (
+                          <span className="text-xs italic text-slate-400">Blank</span>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
