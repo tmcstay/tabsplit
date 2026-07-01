@@ -266,6 +266,36 @@ export async function deleteLineItem(itemId: string): Promise<void> {
   if (error) throw new Error('Failed to delete item.')
 }
 
+export async function removeAttendee(attendeeId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  await supabase.from('item_assignments').delete().eq('attendee_id', attendeeId)
+  await supabase.from('attendees').update({ group_id: null }).eq('id', attendeeId)
+  const { error } = await supabase.from('attendees').delete().eq('id', attendeeId)
+  if (error) throw new Error('Failed to remove attendee.')
+}
+
+export async function addAttendee(
+  splitId: string,
+  displayName: string,
+  phone: string | null,
+  email: string | null,
+): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase.from('attendees').insert({
+    split_id: splitId,
+    display_name: displayName,
+    phone,
+    email,
+  })
+  if (error) throw new Error('Failed to add attendee.')
+}
+
 export async function equalSplit(splitId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

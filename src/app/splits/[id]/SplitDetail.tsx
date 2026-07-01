@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Tables } from '@/types/database'
 import type { ReceiptFields } from '@/lib/parseReceipt'
-import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee, updateLineItem, deleteLineItem } from './actions'
+import { saveItems, assignItem, mergeAttendees, unmergeGroup, finaliseSplit, equalSplit, addLineItem, applyDiscount, removeDiscount, updateAttendee, updateLineItem, deleteLineItem, removeAttendee, addAttendee } from './actions'
 
 interface Props {
   split: Tables<'splits'>
@@ -120,11 +120,12 @@ export function SplitDetail({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAddCharge, setShowAddCharge] = useState(false)
-  const [chargeType, setChargeType] = useState<'tip' | 'app' | 'service' | 'custom'>('tip')
+  const [chargeType, setChargeType] = useState<'tip' | 'app' | 'service' | 'custom' | 'tx'>('tip')
   const [chargeDesc, setChargeDesc] = useState('')
   const [chargeAmount, setChargeAmount] = useState('')
   const [chargeAssignAll, setChargeAssignAll] = useState(true)
   const [appFeeMode, setAppFeeMode] = useState<'host' | 'individual'>('host')
+  const [txFeeMode, setTxFeeMode] = useState<'flat' | 'percentage'>('flat')
 
   // Discount modal state
   const [showDiscount, setShowDiscount] = useState(false)
@@ -157,6 +158,14 @@ export function SplitDetail({
   } | null>(null)
   const [activeTab, setActiveTab] = useState<'assign' | 'ocr'>('assign')
 
+  // Attendee management state
+  const [removeAttendeeId, setRemoveAttendeeId] = useState<string | null>(null)
+  const [addAttendeeView, setAddAttendeeView] = useState(false)
+  const [addAttendeeName, setAddAttendeeName] = useState('')
+  const [addAttendeePhone, setAddAttendeePhone] = useState('')
+  const [addAttendeeEmail, setAddAttendeeEmail] = useState('')
+  const [addAttendeeError, setAddAttendeeError] = useState<string | null>(null)
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAssignments(
@@ -170,10 +179,34 @@ export function SplitDetail({
     (sum, item) => ((assignments[item.id] ?? []).length > 0 ? sum + item.price : sum),
     0
   )
+  const assignedCount = items.filter(i => (assignments[i.id] ?? []).length > 0).length
   const unassignedCount = items.filter(i => !(assignments[i.id] ?? []).length).length
+  const totalUnassigned = Math.round((itemsSum - totalAssigned) * 100) / 100
+
+  // Compute per-attendee totals from current assignment state for discount calculation
+  const attendeeTotals: Record<string, number> = {}
+  for (const item of items) {
+    const ids = assignments[item.id] ?? []
+    if (ids.length === 0) continue
+    const share = item.price / ids.length
+    for (const id of ids) {
+      attendeeTotals[id] = (attendeeTotals[id] ?? 0) + share
+    }
+  }
+  let totalDiscountAmount = 0
+  for (const d of discounts) {
+    const affectedIds = discountAttendees.filter(da => da.discount_id === d.id).map(da => da.attendee_id)
+    if (d.type === 'flat') {
+      totalDiscountAmount += d.value
+    } else {
+      const affectedTotal = affectedIds.reduce((s, id) => s + (attendeeTotals[id] ?? 0), 0)
+      totalDiscountAmount += Math.round(affectedTotal * (d.value / 100) * 100) / 100
+    }
+  }
+  const adjustedItemsSum = Math.round((itemsSum - totalDiscountAmount) * 100) / 100
 
   const receiptTotal = split.subtotal ?? split.total
-  const itemsVsReceiptDiff = receiptTotal !== null ? Math.round((itemsSum - receiptTotal) * 100) / 100 : null
+  const itemsVsReceiptDiff = receiptTotal !== null ? Math.round((adjustedItemsSum - receiptTotal) * 100) / 100 : null
   const itemsMatchReceipt = itemsVsReceiptDiff !== null && Math.abs(itemsVsReceiptDiff) < 0.02
 
   // The organiser is always the host for app fee purposes
@@ -485,6 +518,39 @@ export function SplitDetail({
     }
   }
 
+  async function handleAddAttendee() {
+    if (!addAttendeeName.trim()) return
+    setBusy(true)
+    setAddAttendeeError(null)
+    try {
+      await addAttendee(split.id, addAttendeeName.trim(), addAttendeePhone.trim() || null, addAttendeeEmail.trim() || null)
+      setAddAttendeeView(false)
+      setAddAttendeeName('')
+      setAddAttendeePhone('')
+      setAddAttendeeEmail('')
+      router.refresh()
+    } catch {
+      setAddAttendeeError('Failed to add attendee.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRemoveAttendee() {
+    if (!removeAttendeeId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await removeAttendee(removeAttendeeId)
+      setRemoveAttendeeId(null)
+      router.refresh()
+    } catch {
+      setError('Failed to remove attendee.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ── Add charge ───────────────────────────────────────────────────────────────
 
   async function handleAddCharge() {
@@ -492,12 +558,14 @@ export function SplitDetail({
       chargeType === 'tip' ? 'Tip' :
       chargeType === 'app' ? 'App fee' :
       chargeType === 'service' ? 'Service charge' :
+      chargeType === 'tx' ? 'Transaction fee' :
       chargeDesc.trim()
     const totalEntered = Math.round(parseFloat(chargeAmount) * 100) / 100
     if (!desc || isNaN(totalEntered) || totalEntered <= 0) return
 
     let finalPrice = totalEntered
     let attendeeIds: string[] | null = chargeAssignAll ? null : []
+
     if (chargeType === 'app' && appFeeMode === 'individual') {
       const perPerson = totalEntered / attendees.length
       const nonHosts = hostAttendee
@@ -505,6 +573,11 @@ export function SplitDetail({
         : attendees
       finalPrice = Math.round(perPerson * nonHosts.length * 100) / 100
       attendeeIds = nonHosts.map(a => a.id)
+    } else if (chargeType === 'tx') {
+      if (txFeeMode === 'percentage') {
+        finalPrice = Math.round(itemsSum * totalEntered / 100 * 100) / 100
+      }
+      attendeeIds = null // always assign to all
     }
 
     setBusy(true)
@@ -517,6 +590,7 @@ export function SplitDetail({
       setChargeAmount('')
       setChargeAssignAll(true)
       setAppFeeMode('host')
+      setTxFeeMode('flat')
       router.refresh()
     } catch {
       setError('Failed to add charge.')
@@ -793,12 +867,16 @@ export function SplitDetail({
         </div>
 
         {/* Summary row */}
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span className="text-slate-500">
-            Assigned: <span className="font-semibold text-gwfc-blue">{fmt(totalAssigned)}</span>
+        <div className="mt-2 flex items-center justify-between text-xs">
+          <span className="font-medium text-emerald-600">
+            Assigned: {assignedCount} · {fmt(totalAssigned)}
           </span>
-          {unassignedCount > 0 && (
-            <span className="font-medium text-amber-600">{unassignedCount} unassigned</span>
+          {unassignedCount > 0 ? (
+            <span className="font-medium text-amber-600">
+              Unassigned: {unassignedCount} · {fmt(totalUnassigned)}
+            </span>
+          ) : (
+            <span className="text-slate-400">All assigned</span>
           )}
         </div>
 
@@ -830,7 +908,7 @@ export function SplitDetail({
         <div className="space-y-4">
 
           {/* Receipt total vs items sum */}
-          {(receiptTotal !== null || itemsSum > 0) && (
+          {(receiptTotal !== null || adjustedItemsSum > 0) && (
             <div className={`rounded-2xl px-4 py-3 ring-1 ${
               itemsVsReceiptDiff === null ? 'bg-white ring-slate-200' :
               itemsMatchReceipt ? 'bg-emerald-50 ring-emerald-200' : 'bg-amber-50 ring-amber-200'
@@ -844,7 +922,7 @@ export function SplitDetail({
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500">Items sum</p>
-                  <p className="text-xl font-bold text-gwfc-blue">{fmt(itemsSum)}</p>
+                  <p className="text-xl font-bold text-gwfc-blue">{fmt(adjustedItemsSum)}</p>
                 </div>
               </div>
               {itemsVsReceiptDiff !== null && (
@@ -902,14 +980,17 @@ export function SplitDetail({
             </button>
             <button
               type="button"
-              onClick={() => { setShowEditAttendees(true); setEditAttendeeId(null) }}
+              onClick={() => { setShowEditAttendees(true); setEditAttendeeId(null); setRemoveAttendeeId(null); setAddAttendeeView(false) }}
               className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                <circle cx="9" cy="7" r="3" />
+                <path d="M3 20c0-3 2.7-5 6-5" />
+                <path d="M16 11l2 2 4-4" />
+                <circle cx="18" cy="14" r="3" />
+                <path d="M14 20c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5" />
               </svg>
-              Edit attendees
+              Attendees
             </button>
           </div>
 
@@ -1345,43 +1426,103 @@ export function SplitDetail({
       {/* ── Edit attendees sheet ────────────────────────────────────────────── */}
       {showEditAttendees && (
         <div className="fixed inset-0 z-50 flex items-end">
-          <div className="fixed inset-0 bg-black/40" onClick={() => { setShowEditAttendees(false); setEditAttendeeId(null) }} />
+          <div className="fixed inset-0 bg-black/40" onClick={() => { setShowEditAttendees(false); setEditAttendeeId(null); setRemoveAttendeeId(null); setAddAttendeeView(false) }} />
           <div className="relative flex max-h-[80vh] w-full flex-col rounded-t-2xl bg-white shadow-xl">
-            {editAttendeeId === null ? (
+
+            {/* ── Add attendee view ── */}
+            {addAttendeeView ? (
               <>
-                <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gwfc-blue">Edit attendees</p>
-                  <button type="button" onClick={() => setShowEditAttendees(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                      <path d="M18 6L6 18M6 6l12 12" />
+                <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center gap-3">
+                  <button type="button" onClick={() => { setAddAttendeeView(false); setAddAttendeeName(''); setAddAttendeePhone(''); setAddAttendeeEmail(''); setAddAttendeeError(null) }} className="text-slate-400 hover:text-slate-600" aria-label="Back">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
+                  <p className="text-sm font-semibold text-gwfc-blue">Add attendee</p>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                  {attendees.map(a => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => openEditAttendee(a)}
-                      className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 hover:bg-slate-50 active:bg-slate-100"
-                    >
-                      <div className="min-w-0 text-left">
-                        <p className="truncate text-sm font-medium text-gwfc-blue">{a.display_name}</p>
-                        {(a.phone || a.email) && (
-                          <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
-                        )}
-                      </div>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-                        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-                        className="shrink-0 text-slate-300">
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                  ))}
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                  {addAttendeeError && (
+                    <p className="text-sm text-red-500">{addAttendeeError}</p>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Sarah"
+                      value={addAttendeeName}
+                      onChange={e => setAddAttendeeName(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={addAttendeePhone}
+                      onChange={e => setAddAttendeePhone(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={addAttendeeEmail}
+                      onChange={e => setAddAttendeeEmail(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-gwfc-blue placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddAttendee}
+                    disabled={!addAttendeeName.trim() || busy}
+                    className="w-full rounded-2xl bg-teal-600 py-3.5 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    {busy ? 'Adding…' : 'Add attendee'}
+                  </button>
                 </div>
               </>
-            ) : (
+
+            /* ── Remove confirmation view ── */
+            ) : removeAttendeeId !== null ? (
+              <>
+                <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center gap-3">
+                  <button type="button" onClick={() => setRemoveAttendeeId(null)} className="text-slate-400 hover:text-slate-600" aria-label="Back">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </button>
+                  <p className="text-sm font-semibold text-gwfc-blue">Remove attendee</p>
+                </div>
+                <div className="px-4 py-4">
+                  <p className="text-sm text-slate-600">
+                    Remove <span className="font-semibold text-gwfc-blue">{attendees.find(a => a.id === removeAttendeeId)?.display_name}</span> from this split?
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">All item assignments for this attendee will also be removed.</p>
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRemoveAttendeeId(null)}
+                      className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveAttendee}
+                      disabled={busy}
+                      className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40"
+                    >
+                      {busy ? 'Removing…' : 'Remove'}
+                    </button>
+                  </div>
+                </div>
+              </>
+
+            /* ── Edit attendee view ── */
+            ) : editAttendeeId !== null ? (
               <>
                 <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center gap-3">
                   <button type="button" onClick={() => setEditAttendeeId(null)} className="text-slate-400 hover:text-slate-600" aria-label="Back">
@@ -1431,6 +1572,65 @@ export function SplitDetail({
                     className="w-full rounded-2xl bg-gwfc-blue py-3.5 text-sm font-semibold text-white disabled:opacity-40"
                   >
                     {busy ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </>
+
+            /* ── Attendee list view ── */
+            ) : (
+              <>
+                <div className="shrink-0 border-b border-slate-100 px-4 py-4 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gwfc-blue">Attendees ({attendees.length})</p>
+                  <button type="button" onClick={() => setShowEditAttendees(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {attendees.map(a => (
+                    <div
+                      key={a.id}
+                      className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gwfc-blue">{a.display_name}</p>
+                        {(a.phone || a.email) && (
+                          <p className="truncate text-xs text-slate-400">{a.phone ?? a.email}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openEditAttendee(a)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="Edit"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveAttendeeId(a.id)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
+                        aria-label="Remove"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => { setAddAttendeeView(true); setAddAttendeeName(''); setAddAttendeePhone(''); setAddAttendeeEmail(''); setAddAttendeeError(null) }}
+                    className="flex w-full items-center gap-2 px-4 py-3.5 text-sm font-medium text-teal-600 hover:bg-teal-50"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Add attendee
                   </button>
                 </div>
               </>
@@ -1529,17 +1729,18 @@ export function SplitDetail({
 
             <div className="space-y-4 px-4 py-4">
               {/* Type chips */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 {([
                   { value: 'tip',     label: 'Tip' },
                   { value: 'app',     label: 'App fee' },
                   { value: 'service', label: 'Service' },
                   { value: 'custom',  label: 'Custom' },
+                  { value: 'tx',      label: 'Tx fee' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => { setChargeType(opt.value); setChargeAmount(''); setAppFeeMode('host') }}
+                    onClick={() => { setChargeType(opt.value); setChargeAmount(''); setAppFeeMode('host'); setTxFeeMode('flat') }}
                     className={`rounded-lg py-2 text-xs font-medium transition-colors ${
                       chargeType === opt.value
                         ? 'bg-teal-600 text-white'
@@ -1560,6 +1761,36 @@ export function SplitDetail({
                   onChange={e => setChargeDesc(e.target.value)}
                   className="w-full rounded-lg px-3 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 shadow-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
                 />
+              )}
+
+              {/* Tx fee mode */}
+              {chargeType === 'tx' && (
+                <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600">Fee type</p>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'flat',       label: 'Flat ($)' },
+                      { value: 'percentage', label: '% of subtotal' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setTxFeeMode(opt.value); setChargeAmount('') }}
+                        className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                          txFeeMode === opt.value
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {txFeeMode === 'percentage' && itemsSum > 0 && (
+                    <p className="text-xs text-slate-400">Subtotal: {fmt(itemsSum)}</p>
+                  )}
+                  <p className="text-xs text-slate-400">Always assigned to all attendees equally.</p>
+                </div>
               )}
 
               {/* Tip percentage shortcuts */}
@@ -1655,7 +1886,9 @@ export function SplitDetail({
 
               {/* Amount */}
               <div className="flex items-center gap-2 rounded-lg px-3 shadow-sm ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-teal-500">
-                <span className="text-sm font-medium text-slate-400">$</span>
+                {(chargeType !== 'tx' || txFeeMode === 'flat') && (
+                  <span className="text-sm font-medium text-slate-400">$</span>
+                )}
                 <input
                   type="number"
                   inputMode="decimal"
@@ -1664,10 +1897,13 @@ export function SplitDetail({
                   onChange={e => setChargeAmount(e.target.value)}
                   className="flex-1 py-2.5 text-sm text-gwfc-blue placeholder-slate-400 outline-none"
                 />
+                {(chargeType === 'tx' && txFeeMode === 'percentage') && (
+                  <span className="text-sm font-medium text-slate-400">%</span>
+                )}
               </div>
 
-              {/* Split equally toggle — hidden for app fee (handled by mode above) */}
-              {chargeType !== 'app' && (
+              {/* Split equally toggle — hidden for app fee and tx fee (both always assign to all) */}
+              {chargeType !== 'app' && chargeType !== 'tx' && (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gwfc-blue">Split equally</p>
