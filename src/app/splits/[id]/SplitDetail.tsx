@@ -209,6 +209,17 @@ export function SplitDetail({
   const itemsVsReceiptDiff = receiptTotal !== null ? Math.round((adjustedItemsSum - receiptTotal) * 100) / 100 : null
   const itemsMatchReceipt = itemsVsReceiptDiff !== null && Math.abs(itemsVsReceiptDiff) < 0.02
 
+  // Smart variance: identify known manually-added charges so we can explain the gap
+  const KNOWN_CHARGE_DESCRIPTIONS = ['Tip', 'App fee', 'Service charge', 'Transaction fee']
+  const chargeItems = items.filter(i => KNOWN_CHARGE_DESCRIPTIONS.includes(i.description))
+  const chargesSum = chargeItems.reduce((s, i) => s + i.price, 0)
+  // Gap between base items (excl. known charges + discounts) and receipt total
+  const unexplainedGap = receiptTotal !== null
+    ? Math.round(((itemsSum - chargesSum) - totalDiscountAmount - receiptTotal) * 100) / 100
+    : null
+  // True when the entire variance is accounted for by known charges and/or discounts
+  const gapFullyExplained = !itemsMatchReceipt && unexplainedGap !== null && Math.abs(unexplainedGap) < 0.02
+
   // The organiser is always the host for app fee purposes
   const hostAttendee = attendees.find(a => a.user_id === split.organiser_id) ?? null
 
@@ -911,7 +922,9 @@ export function SplitDetail({
           {(receiptTotal !== null || adjustedItemsSum > 0) && (
             <div className={`rounded-2xl px-4 py-3 ring-1 ${
               itemsVsReceiptDiff === null ? 'bg-white ring-slate-200' :
-              itemsMatchReceipt ? 'bg-emerald-50 ring-emerald-200' : 'bg-amber-50 ring-amber-200'
+              itemsMatchReceipt ? 'bg-emerald-50 ring-emerald-200' :
+              gapFullyExplained ? 'bg-slate-50 ring-slate-200' :
+              'bg-amber-50 ring-amber-200'
             }`}>
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -926,19 +939,30 @@ export function SplitDetail({
                 </div>
               </div>
               {itemsVsReceiptDiff !== null && (
-                <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${itemsMatchReceipt ? 'text-emerald-600' : 'text-amber-700'}`}>
-                  {itemsMatchReceipt ? (
-                    <>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
-                      Items match total
-                    </>
-                  ) : (
-                    <>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      {fmt(Math.abs(itemsVsReceiptDiff))} {itemsVsReceiptDiff > 0 ? 'over' : 'short of'} total
-                    </>
-                  )}
-                </div>
+                itemsMatchReceipt ? (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    Items match total
+                  </div>
+                ) : gapFullyExplained ? (
+                  <div className="mt-2 flex items-start gap-1.5 text-xs text-slate-500">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px shrink-0" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>
+                      Includes{' '}
+                      {[
+                        ...chargeItems.map(c => `${c.description} ${fmt(c.price)}`),
+                        ...(totalDiscountAmount > 0.01 ? [`${fmt(totalDiscountAmount)} discount`] : []),
+                      ].join(' · ')}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    {fmt(Math.abs(itemsVsReceiptDiff))} {itemsVsReceiptDiff > 0 ? 'over' : 'short of'} total
+                  </div>
+                )
               )}
             </div>
           )}
@@ -1283,10 +1307,12 @@ export function SplitDetail({
               <button
                 type="button"
                 onClick={handleConfirmAssign}
-                disabled={assignSelected.length === 0}
+                disabled={busy}
                 className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
-                Save
+                {assignSelected.length === 0 && assignModalItemId && (assignments[assignModalItemId] ?? []).length > 0
+                  ? 'Unassign'
+                  : 'Save'}
               </button>
             </div>
           </div>
