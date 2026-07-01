@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'TabSplit',
+  title: 'Split-It',
   description: 'Split the bill, keep the peace.',
   manifest: '/manifest.json',
 }

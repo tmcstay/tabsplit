@@ -40,7 +40,7 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
 
   function sendShare() {
     if (!shareUrl) return
-    const message = `Hey ${person.label}, here's the TabSplit for ${splitTitle} — your group owes $${person.total.toFixed(2)}. ${shareUrl}`
+    const message = `Hey ${person.label}, here's the Split-It for ${splitTitle} — your group owes $${person.total.toFixed(2)}. ${shareUrl}`
     if (navigator.share) {
       navigator.share({ text: message }).catch(() => {})
     } else {
@@ -55,7 +55,7 @@ export function PersonCard({ person, splitTitle, shareUrl, onTogglePaid, onToggl
       setShowGroupSharePicker(true)
       return
     }
-    const message = `Hey ${person.label}, here's the TabSplit for ${splitTitle} — you owe $${person.total.toFixed(2)}. ${shareUrl}`
+    const message = `Hey ${person.label}, here's the Split-It for ${splitTitle} — you owe $${person.total.toFixed(2)}. ${shareUrl}`
     if (navigator.share) {
       navigator.share({ text: message }).catch(() => {})
     } else {

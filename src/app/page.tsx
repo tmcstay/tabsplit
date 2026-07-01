@@ -45,7 +45,7 @@ export default async function HomePage() {
   return (
     <div className="flex min-h-screen flex-col pb-32">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-4 safe-top">
-        <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">TabSplit</h1>
+        <h1 className="text-xl font-bold tracking-tight text-gwfc-blue">Split-It</h1>
         {commitSha && (
           <p className="font-mono text-[10px] text-slate-300">{commitSha}</p>
         )}

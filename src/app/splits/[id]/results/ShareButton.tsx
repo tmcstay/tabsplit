@@ -9,7 +9,7 @@ export function ShareButton({ token }: { token: string }) {
     const url = `${window.location.origin}/share/${token}`
     if (navigator.share) {
       try {
-        await navigator.share({ url, title: 'View your split on TabSplit' })
+        await navigator.share({ url, title: 'View your split on Split-It' })
       } catch {
         // User dismissed share sheet — ignore
       }

@@ -1,27 +1,53 @@
 # TabSplit — Session Handoff
 
 ## Session Date
-2026-06-30 (session 7)
+2026-07-01 (session 9)
 
 ## Completed This Session
 
-### OCR Parser Fix — Blank "Tip:" Label
-- **Bug**: A blank "Tip:" line on printed receipts was being matched by Strategy 1 (price-on-next-line), pairing it with the nearby total/subtotal value and creating a spurious Tip line item.
-- **Fix**: Added `\btip\b` to `skipRe` so "Tip:" lines are never treated as item descriptions. Subtotal now extracted separately. A Tip line item is only created if `Total Inc Tax > Subtotal` (difference = tip amount). If no subtotal found, falls back to `total − sum(items)`.
-- Extracted `parseReceiptText` to `src/lib/parseReceipt.ts` for testability.
-- Added Vitest (`npm test`) with two test cases: bug fixture (5 items, $113 subtotal, blank Tip:, $113 total → no tip) and regression (total exceeds subtotal → tip = difference).
+### /reset-password page (`src/app/(auth)/reset-password/page.tsx`)
+- Client component sitting inside the `(auth)` route group — inherits the `min-h-screen bg-slate-50` centred layout; BottomNav already excluded `/reset-password` from nav chrome.
+- Four-state machine: `loading → ready | invalid`, and `ready → success`.
+- **Loading state**: teal spinning SVG + "Verifying reset link…" while waiting for `onAuthStateChange`.
+- **`PASSWORD_RECOVERY` event**: `supabase.auth.onAuthStateChange` listener set up on mount; when the event fires, clears the 4-second timeout and transitions to `ready`.
+- **Invalid state** (4-second timeout, no event): red X icon, "Link invalid or expired" message, "Request a new reset link" (→ `/forgot-password`) and "Back to log in" (→ `/login`) links.
+- **Form** (`ready`): two `PasswordInput` fields (same show/hide pattern as `LoginForm.tsx`), client-side validation (min 8 chars, must match), inline red error display, teal "Update password" button.
+- **Success state**: green checkmark icon, "Password updated — redirecting…", `router.push('/')` after 1.5 s.
+- Build confirmed clean (`npm run build` — no new errors or warnings).
 
-### Edit / Delete / Add Line Items on Assign Screen
-- **Edit**: Pencil icon on each item row opens an "Edit item" bottom sheet — updates description and/or amount via `updateLineItem` server action.
-- **Delete**: Trash icon opens a "Remove item" confirmation sheet — clears assignments then deletes the row via `deleteLineItem` server action.
-- **Add**: Dashed "Add item" button below the items list opens an "Add item" bottom sheet — creates item unassigned via existing `addLineItem` action.
-- All three mutations call `router.refresh()` so Assigned total and unassigned count update immediately.
+---
 
-### Eruda Debug Console (Re-added)
-- Installed `eruda` npm package (replaces previous `next/script` CDN approach).
-- `src/lib/debug.ts` — exports `initEruda()`: skips if `NEXT_PUBLIC_ENABLE_ERUDA=false`, otherwise dynamically imports and calls `eruda.init()`.
-- `src/components/ErudaInit.tsx` — `'use client'` component, calls `initEruda()` in `useEffect`, mounted in `layout.tsx`.
-- **Eruda is ON by default** on all builds/deploys. Set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before any public/production release.
+## Previous Session (Session 8) — Completed
+
+### Assign Screen — 4 Improvements
+1. **Summary bar**: Replaced the old single-line assigned total with a `justify-between` row — left "Assigned: N · $X.XX" (`text-emerald-600`), right "Unassigned: N · $X.XX" (`text-amber-600`), or "All assigned" (`text-slate-400`) when done.
+
+2. **Adjusted items sum**: `adjustedItemsSum = itemsSum − totalDiscountAmount` — discounts are live-computed from the current `assignments` state (per-attendee item share × discount rate). The receipt vs items variance card and `itemsVsReceiptDiff` both use this adjusted figure, so applied discounts are reflected without refreshing.
+
+3. **Transaction fee charge type**: New 5th chip in Add charge modal (grid is now `grid-cols-5`). Sub-mode toggle: Flat ($) uses entered amount directly; % of subtotal computes `itemsSum × rate / 100`. Amount input shows `$` prefix for flat and `%` suffix for percentage. Always assigned to all attendees (no "Split equally" toggle). Labelled "Transaction fee" on the bill.
+
+4. **Attendees sheet** (4 sub-views):
+   - **List**: each attendee row has edit (pencil) and remove (trash) icon buttons; "Add attendee" teal link at the bottom
+   - **Edit**: existing name/phone/email form (unchanged)
+   - **Add**: new name/phone/email form → `addAttendee` server action
+   - **Remove confirmation**: shows attendee name, Cancel/Remove buttons → `removeAttendee` server action (clears item_assignments, sets group_id null, then deletes)
+   - "Attendees" button on toolbar (renamed from "Edit attendees"); resets all sub-view state on open
+
+### New Server Actions (`src/app/splits/[id]/actions.ts`)
+- `addAttendee(splitId, displayName, phone, email)` — inserts new attendee into split
+- `removeAttendee(attendeeId)` — deletes item_assignments → sets group_id null → deletes attendee
+
+### Bug Fix — Unassign via Edit
+- **Bug**: assign modal Save button was `disabled={assignSelected.length === 0}`, preventing the user from saving zero selections to unassign an item.
+- **Fix**: removed the zero-selection guard; button is now `disabled={busy}` only. Button label changes to "Unassign" when the item had existing assignments and the user has deselected all, otherwise "Save".
+
+### Bug Fix — Smart Variance Indicator
+- **Old behaviour**: any gap between Items sum and Receipt total showed amber warning.
+- **New behaviour** (three states):
+  1. **Green** — `adjustedItemsSum` matches receipt total exactly (< $0.02 diff)
+  2. **Neutral slate** — gap is fully explained by known charges (`KNOWN_CHARGE_DESCRIPTIONS = ['Tip', 'App fee', 'Service charge', 'Transaction fee']`) and/or discounts; shows info icon + "Includes Tip $8.00 · $5.00 discount" style text
+  3. **Amber warning** — gap is genuinely unexplained (OCR missed/misread prices, or item added via "Add item" that doesn't match a known charge label)
+- Card background changes to match: emerald-50 / slate-50 / amber-50
 
 ---
 
@@ -29,7 +55,8 @@
 
 | Issue | Root Cause | Resolution |
 |-------|-----------|------------|
-| Blank "Tip:" on receipt creates $113 Tip item | Strategy 1 paired "Tip:" with next price-only line | Added `\btip\b` to skipRe; tip now inferred from Total−Subtotal only |
+| JSX parse error: `Expected '</', got ')'` | IIFE inside ternary chain (`?) (() => { return (<>...</>) })()`) breaks JSX parser | Removed IIFE; inlined `attendees.find(...)` directly in JSX expression |
+| `prefer-const` ESLint error on `desc` in `handleAddCharge` | Declared as `let` but never reassigned (all branches covered in ternary) | Changed to `const` |
 
 ---
 
@@ -37,17 +64,13 @@
 
 1. **Confirm multi-recipient group SMS on device** — verify `sms://open?addresses=` format opens a group iMessage thread with both recipients.
 
-2. **Build `/reset-password` page** — `forgot-password/page.tsx` sends reset email pointing to `/reset-password`; that route currently 404s. Needs to handle `type=recovery` session, show new password fields, call `supabase.auth.updateUser({ password })`, redirect to `/` on success.
+2. **Disable Eruda for production** — set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before public/production release. Currently ON by default on all builds.
 
-3. **Disable Eruda for production** — set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before public/production release. Currently ON by default on all builds.
-
-4. **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure. Low priority until Android build is needed.
+3. **Android package path** — `android/app/src/main/java/com/tabsplit/app/` still uses old package structure. Low priority until Android build is needed.
 
 ---
 
 ## Open Questions / Decisions to Revisit
-
-- **`/reset-password` page missing** — anyone clicking "Forgot password?" hits a 404 after the reset email. High priority before shipping.
 
 - **Multi-recipient SMS confirmation** — `sms://open?addresses=` is documented for iOS but not confirmed working on device yet.
 
@@ -57,11 +80,17 @@
 
 - **Android bundle ID** — `android/app/src/main/java/com/tabsplit/app/` uses old package structure. Low priority.
 
-- **OCR multi-line parsing accuracy** — real-world receipt accuracy not formally confirmed; price-on-next-line strategy needs more test receipts.
+- **Smart variance and "Add item"** — items added via "Add item" (not "Add charge") don't match `KNOWN_CHARGE_DESCRIPTIONS`, so they cause unexplained amber variance. This is intentional for now (OCR miss vs intentional add is indistinguishable), but could be addressed with an `is_charge` flag on items if needed.
 
 ---
 
 ## Previous Sessions Summary
+
+### Session 7 (2026-06-30)
+- Updated `saveItems` to accept and persist `subtotal` to splits table; migration `20260630000000` run
+- Assign screen UI overhaul: removed receipt thumbnail, added sticky header with tab switcher (Assign / OCR data), OCR data tab with 7 named fields (Found/Blank/Not found), receipt vs items summary card at top of Assign tab, "View full receipt" row at bottom
+- Fixed OCR multi-line field detection: `detectField` now looks ahead up to 2 lines for a price-only line when label and value are on separate lines
+- Added Vitest unit tests for `parseReceipt.ts` (4 tests); extracted parser to `src/lib/parseReceipt.ts`
 
 ### Session 6 (2026-06-26)
 - Debug console.log cleanup from splits/new/actions.ts

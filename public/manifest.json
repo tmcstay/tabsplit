@@ -1,6 +1,6 @@
 {
-  "name": "TabSplit",
-  "short_name": "TabSplit",
+  "name": "Split-It",
+  "short_name": "Split-It",
   "description": "Split the bill, keep the peace.",
   "start_url": "/",
   "display": "standalone",

@@ -63,7 +63,7 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - Email + password (`signInWithPassword` / `signUp`)
 - `LoginForm.tsx` has a tab switcher: **Log in** (email + password → `signInWithPassword`) and **Sign up** (email + password + confirm → `signUp` → email confirmation required before first login)
 - Password field has show/hide toggle; friendly error messages mapped from Supabase error strings
-- Forgot password: `resetPasswordForEmail` → sends reset link to `/reset-password` — **NOTE: `/reset-password` page does not yet exist**; the reset link will 404 after clicking
+- Forgot password: `resetPasswordForEmail` → sends reset link to `/reset-password` → `src/app/(auth)/reset-password/page.tsx` handles the recovery token, shows password form, calls `supabase.auth.updateUser({ password })`, redirects to `/` on success
 - Server-side auth check on login page: `getUser()` → redirect to `/` if already authenticated
 - Files: `src/app/(auth)/login/page.tsx` (server component, auth guard), `LoginForm.tsx` (client component, tabs + forms), `forgot-password/page.tsx` (client component)
 
@@ -72,7 +72,7 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - `users` — auth users with display_name, phone, payid, payid_label
 - `groups` — saved collections of people the organiser splits with regularly; `saved` boolean (default false) indicates whether the organiser has chosen to keep the group for future use
 - `group_members` — individual people within a group; each has a display_name, optional phone, optional email, optional link to a user account, and optional `merge_group_id` / `merge_label` for pre-configured merge pairs (e.g. couples)
-- `splits` — a dining event with receipt, organiser, status, and optional `group_id` linking back to the group it was created from
+- `splits` — a dining event with receipt, organiser, status, optional `group_id`, `total` (receipt grand total), and `subtotal` (receipt subtotal before tip/tax); both set at OCR scan time
 - `attendees` — people in a split, linked to optional user account; has optional email field; `paid boolean` (default false) tracks whether each attendee has paid their share
 - `attendee_groups` — merged attendees within a split (e.g. couples paying together); has optional `phone` and `email` columns for the nominated group contact when sending share messages
 - `items` — individual line items exploded from receipt (no quantity field — one row per unit)
@@ -94,6 +94,7 @@ All UI uses an ocean/slate palette. Do not reintroduce zinc or grey.
 - `20260625020000` — adds phone and email columns to attendee_groups; stores nominated contact for group share messages
 - `20260625030000` — adds `paid boolean not null default false` to attendees
 - `20260625040000` — adds `favourite_contacts` table with RLS (owner read/write only)
+- `20260630000000` — adds `subtotal numeric(10,2)` column to splits (stores receipt subtotal from OCR scan)
 
 ### Split Status Flow
 Splits move through these states:
@@ -119,7 +120,8 @@ Splits can be moved back from `finalised` → `draft` via the Edit button on the
 7. Organiser can tap "Edit" on the results page to reopen the split for editing (unfinalises it)
 
 ## Extra Charges (Tips & Fees)
-Added via "Add charge" button in SplitDetail. Types: Tip, App fee, Service charge, Custom.
+Added via "Add charge" button in SplitDetail. Types: Tip, App fee, Service charge, Custom, Transaction fee.
+Add charge modal has 5 chips in a `grid-cols-5` layout.
 
 ### Tip
 - Shows bill subtotal
@@ -134,6 +136,12 @@ Added via "Add charge" button in SplitDetail. Types: Tip, App fee, Service charg
 
 ### Service charge / Custom
 - Fixed amount, split equally toggle
+
+### Transaction fee
+- Two sub-modes toggled by chips: **Flat ($)** — enter dollar amount directly; **% of subtotal** — enter percentage, computed as `itemsSum × pct / 100`
+- Amount input shows `$` prefix for flat, `%` suffix for percentage
+- Always assigned to all attendees equally (no "Split equally" toggle shown)
+- Labelled "Transaction fee" on the bill; identified as a known charge in variance display
 
 ## Discounts
 Added via "Apply discount" inline button in SplitDetail (alongside "Merge attendees" and "Add charge").
@@ -155,15 +163,22 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 
 ## Server Actions
 - `src/app/splits/[id]/actions.ts`:
-  - `saveItems` — inserts OCR-parsed items, updates split status to draft
-  - `assignItem(itemId, attendeeIds[])` — replaces assignments for one item
+  - `saveItems(splitId, items, total?, subtotal?)` — inserts OCR-parsed items, updates split status to draft, persists `total` and `subtotal` to splits row
+  - `assignItem(itemId, attendeeIds[])` — replaces assignments for one item; pass `[]` to unassign
   - `addLineItem(splitId, description, price, attendeeIds | null, sortOrder)` — adds a tip/charge item; null = assign to all, [] = leave unassigned, [...ids] = specific attendees
   - `mergeAttendees` — creates attendee_groups record and links attendees
+  - `unmergeGroup(groupId)` — unlinks attendees from group, deletes attendee_groups row
   - `finaliseSplit` — sets status to finalised, creates share_link token
   - `unfinaliseSplit` — sets status back to draft, deletes share_link row (used by Edit button on results page)
   - `equalSplit` — assigns all items to all attendees equally
   - `applyDiscount(splitId, type, value, attendeeIds[])` — inserts discount + discount_attendees rows
   - `removeDiscount(discountId)` — deletes discount row (cascade removes discount_attendees)
+  - `updateAttendee(attendeeId, { display_name, phone, email })` — edits attendee contact details
+  - `addAttendee(splitId, displayName, phone, email)` — inserts a new attendee into a split
+  - `removeAttendee(attendeeId)` — clears item_assignments, sets group_id to null, then deletes the attendee row
+  - `updateLineItem(itemId, description, price)` — edits a line item's description and price
+  - `deleteLineItem(itemId)` — removes item_assignments then deletes the item row
+  - `markPaid(splitId, entityId, paid, isGroup)` — marks attendee or attendee_group as paid/unpaid
 - `src/app/splits/new/actions.ts` — `createSplit` (FormData, includes receipt upload and email field on attendees)
 - `src/app/splits/actions.ts` — `deleteSplit`
 
@@ -177,16 +192,42 @@ Discounts applied after item totals are accumulated, before grouping (attendee_g
 
 ### SplitDetail (`src/app/splits/[id]/SplitDetail.tsx`)
 - Handles both states: no-items-yet (scan receipt) and item assignment UI
+- Sticky header contains: back button + title, header action buttons row (Assign/Equal/Finalise), summary bar, tab switcher
 - Header action buttons: Assign (violet, opens assign-by-line sheet), Equal (sky), Finalise (emerald when all assigned / slate when not)
-- Inline content buttons: "Merge attendees", "Add charge", "Apply discount"
+- **Summary bar**: `justify-between` — left "Assigned: N · $X.XX" in `text-emerald-600`, right "Unassigned: N · $X.XX" in `text-amber-600` (or "All assigned" in slate-400 when done)
+- **Tab switcher**: `activeTab: 'assign' | 'ocr'` — "Assign" tab shows item list + toolbar, "OCR data" tab shows 7 detected fields + skipped lines + raw OCR text
+- Inline content toolbar (Assign tab only): "Merge attendees", "Add charge", "Apply discount", "Attendees"
 - `defaultMergeLabel(ids)` auto-generates merge label as "Justin M and Tony M" (first name + surname initial if available, "and" not "&"); user can override before saving
-- Add Charge bottom sheet with tip shortcuts and app fee payment mode logic
+- Add Charge bottom sheet: 5 chips (Tip / App fee / Service / Custom / Tx fee), type-specific content panels, amount input with $-prefix or %-suffix for tx fee
 - Apply Discount bottom sheet: type toggle, value input, attendee multi-select, applied discount chips with remove
 - **App fee host**: derived from `attendees.find(a => a.user_id === split.organiser_id)` — no dropdown; shows static display of host name or "Host not listed as an attendee"
-- Summary bar fixed above bottom nav showing assigned total and unassigned count
+- **Attendees sheet** (4 sub-views): list view (edit pencil + trash per row, "Add attendee" link), edit form, add form, remove confirmation
+- **Receipt vs items summary card**:
+  - `adjustedItemsSum = itemsSum − totalDiscountAmount` (discounts are live-computed from current assignment state)
+  - `itemsVsReceiptDiff = adjustedItemsSum − receiptTotal`
+  - Three-state variance indicator: green "Items match total" / neutral slate "Includes Tip $X · $Y discount" (when gap is fully explained by `KNOWN_CHARGE_DESCRIPTIONS` items + discounts) / amber warning for genuinely unexplained variance
+  - `KNOWN_CHARGE_DESCRIPTIONS = ['Tip', 'App fee', 'Service charge', 'Transaction fee']`
+- **Unassign via edit**: assign modal Save button is always enabled (even with zero selected); shows "Unassign" label when deselecting an already-assigned item
 - Modals use z-50, receipt overlay z-[60]
 - Sequential `for...of` loop for saving assignments (Promise.all drops excess server action calls)
 - Props include `discounts: Tables<'discounts'>[]` and `discountAttendees: Tables<'discount_attendees'>[]`
+
+### OCR Data Tab (`src/app/splits/[id]/SplitDetail.tsx` — OCR tab)
+- Shown when `activeTab === 'ocr'`; only populated after scanning the receipt in the current session (ephemeral — lost on refresh)
+- Displays 7 detected receipt fields using `ReceiptFields` from `src/lib/parseReceipt.ts`:
+  - Subtotal, Total ex tax, GST, Total Inc Tax, To pay, Tip, Total
+  - Found → `text-sm font-semibold text-gwfc-blue` with value; Blank → `italic text-slate-400`; Not found → `text-slate-300 "—"`
+- Also shows: skipped lines (struck-through), raw OCR text (monospace)
+- "View full receipt" row always shown at bottom of main content (outside tab content) when `signedReceiptUrl` is set
+
+### OCR Parser (`src/lib/parseReceipt.ts`)
+- Exports: `LineItem`, `FieldResult` (`found | blank | not_found`), `ReceiptFields` (7 named fields), `ParseResult`, `parseReceiptText(text)`
+- Item zone restriction: only parses lines between "Description" header and first "Subtotal" line to avoid footer pollution
+- `detectField(rawLines, labelRe, maxLook=2)` — checks same line for price, then looks ahead up to 2 lines for a price-only line; stops if real text (>3 chars) intervenes; returns `blank` if label found but no price, `not_found` if label absent
+- 7 fields detected: subtotal (`\bsubtotal\b`), totalExTax, gst, totalIncTax, toPay, tip (`^\s*tip\b`), total (`^\s*total\s*:?\s*$` — exact match only, won't catch "Total Inc Tax")
+- Derived `subtotal = subtotal ?? totalExTax`, `total = totalIncTax ?? toPay ?? total`
+- Tip inference: if `total > subtotal`, creates Tip line item for the difference; falls back to `total − sum(items)` if no subtotal
+- Unit tests: `src/lib/__tests__/parseReceipt.test.ts` — 4 tests via Vitest (`npm test`)
 
 ### NewSplitForm (`src/app/splits/new/NewSplitForm.tsx`)
 - 3-step form: title → attendees → receipt
@@ -350,17 +391,19 @@ Pattern used in all three:
 - POST — accepts `{ image: base64string }`
 - Calls Google Vision DOCUMENT_TEXT_DETECTION
 - On error returns `{ error, visionStatus, visionStatusText, detail }` so client can see upstream HTTP code
-- Parses receipt text: handles price-on-same-line and price-on-next-line formats, explodes quantities
+- Parses receipt text via `parseReceiptText` from `src/lib/parseReceipt.ts`
+- Returns `{ items, total, subtotal, rawLines, excluded, fields, rawText }` — full OCR data including all 7 detected fields and raw lines for the OCR data tab
 
 ## Current Status
 - Auth complete
 - App shell complete (home, profile, bottom nav, saved groups)
 - Groups flow complete (create, edit, save toggle, member management, contacts import)
 - New split flow complete (3-step, receipt upload, contacts import, email field)
-- OCR complete (Google Vision, two-line parsing, quantity explosion)
-- Item assignment UI complete (assign, assign-by-line, equal split, merge attendees)
-- Extra charges complete (tip with % shortcuts, app fee with auto host derivation, service, custom)
+- OCR complete (Google Vision, two-line parsing, quantity explosion, 7 named fields with Found/Blank/Not found states)
+- Item assignment UI complete (assign, assign-by-line, equal split, merge attendees, edit/delete/add items, unassign via edit)
+- Extra charges complete (tip with % shortcuts, app fee with auto host derivation, service, custom, transaction fee)
 - Discounts complete (percentage and flat, per-attendee, shown on results + share pages)
+- Assign screen complete: tab switcher (Assign/OCR data), summary bar (Assigned N·$X / Unassigned N·$X), receipt vs items variance card with smart three-state indicator, Attendees sheet (view/edit/add/remove), `adjustedItemsSum` accounts for discounts
 - Results page complete (collapsible per-person cards, discount lines, edit button to reopen split, share button, star/favourite button on each person)
 - Public share page complete (with discount lines)
 - Favourites complete: `favourite_contacts` table, star toggle on all attendee-adding screens (left of name), Favourites tab on Groups page with from-contacts + from-group pickers + manual add form
@@ -377,4 +420,6 @@ Pattern used in all three:
 - Share SMS/email: groups get full label greeting + per-member breakdown; individuals get first name only
 - Merge label format updated to "Justin M and Tony M" (first name + surname initial, "and" not "&")
 - Multi-select picker for group SMS/email; multi-recipient via sms://open?addresses= and mailto:
-- Next: confirm multi-recipient group SMS works on device; build `/reset-password` page (currently 404 after forgot-password email); set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before public/production release
+- `subtotal` column added to splits table (migration 20260630000000, confirmed run)
+- OCR parser extracted to `src/lib/parseReceipt.ts` with Vitest unit tests (4 tests passing)
+- Next: confirm multi-recipient group SMS works on device; set `NEXT_PUBLIC_ENABLE_ERUDA=false` in Vercel env vars before public/production release

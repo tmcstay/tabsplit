@@ -169,7 +169,7 @@ export default async function SharePage({
       {/* Header */}
       <header className="border-b border-slate-200 bg-white px-4 pb-5 safe-top">
         <div className="mx-auto max-w-lg">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">TabSplit</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Split-It</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gwfc-blue">{split.title}</h1>
           <p className="text-sm text-slate-400">{dateStr}</p>
         </div>
@@ -230,7 +230,7 @@ export default async function SharePage({
         ))}
 
         <p className="text-center text-xs text-slate-400">
-          Split calculated by TabSplit · Read only
+          Split calculated by Split-It · Read only
         </p>
       </main>
     </div>

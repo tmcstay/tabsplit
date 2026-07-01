@@ -40,7 +40,7 @@ export function PayIdForm({
           Payment details
         </p>
         <p className="mt-1 text-sm text-slate-500">
-          Add your PayID so people splitting bills with you know where to send their share. This is for display only — TabSplit never processes payments.
+          Add your PayID so people splitting bills with you know where to send their share. This is for display only — Split-It never processes payments.
         </p>
       </div>
 

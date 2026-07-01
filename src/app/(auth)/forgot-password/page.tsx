@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
   return (
     <div>
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">TabSplit</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Split-It</h1>
         <p className="mt-2 text-sm text-slate-500">Reset your password</p>
       </div>
 

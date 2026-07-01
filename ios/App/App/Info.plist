@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>TabSplit</string>
+        <string>Split-It</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,10 +48,10 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSContactsUsageDescription</key>
-	<string>TabSplit uses your contacts to quickly add people to a bill split.</string>
+	<string>Split-It uses your contacts to quickly add people to a bill split.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>TabSplit uses your camera to scan receipts.</string>
+	<string>Split-It uses your camera to scan receipts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>TabSplit needs access to your photo library to select receipt images.</string>
+	<string>Split-It needs access to your photo library to select receipt images.</string>
 </dict>
 </plist>
